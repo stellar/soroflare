@@ -1,0 +1,15 @@
+workers_dev = true
+compatibility_date = "2023-02-02"
+account_id = "ba55b7ae9acfb3ed152103e3497c0752"
+usage_model = "unbound"
+
+main = "build/worker/shim.mjs"
+rules = [{ globs=["**/*.wasm"], type = "CompiledWasm", fallthrough = false }]
+build = { command = "worker-build --release" }
+
+# Staging environment as default
+name = "fca00c-dev"
+
+vars = { ENVIRONMENT = "dev", ASTEROIDS_SEED="8891", SOROBAN_CPU_BUDGET="16000000000" }
+# Necessary secrets are:
+# - JWT_SECRET

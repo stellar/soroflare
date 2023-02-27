@@ -1,0 +1,41 @@
+[workspace]
+resolver = "2"
+
+members = [
+    "wrangler",
+]
+
+[profile.release-with-logs]
+inherits = "release"
+debug-assertions = true
+
+[profile.release]
+opt-level = "z"
+overflow-checks = true
+debug = 0
+strip = "symbols"
+debug-assertions = false
+panic = "abort"
+codegen-units = 1
+lto = true
+
+[workspace.dependencies]
+rand = { version = "0.8.5", default-features = false, features = ["small_rng"] }
+
+[workspace.dependencies.stellar-xdr]
+version = "0.0.14"
+
+[workspace.dependencies.soroban-env-host]
+version = "0.0.14"
+
+[workspace.dependencies.soroban-spec]
+version = "0.6.0"
+
+[workspace.dependencies.soroban-sdk]
+version = "0.6.0"
+
+[workspace.dependencies.soroban-ledger-snapshot]
+version = "0.6.0"
+
+[workspace.dependencies.stellar-strkey]
+version = "0.0.7"
