@@ -106,7 +106,6 @@ impl super::Task for Asteroids {
 
         let advanced_budget = Budget::default();
         advanced_budget.reset_limits(cpu_limit, u64::MAX);
-        //advanced_budget.reset_unlimited();
 
         let solution_solve_result = soroban_vm::invoke_with_budget(
             &solution_id,
@@ -131,8 +130,7 @@ impl super::Task for Asteroids {
                     .into(),
             );
         }
-        let (_user_solve_result, (_user_solve_storage, user_solve_budget, _user_solve_events)) =
-            solution_solve_result.unwrap();
+        let (user_solve_result, (_, user_solve_budget, _)) = solution_solve_result.unwrap();
 
         let points_req = soroban_vm::invoke(&engine_id, "p_points", &[], &mut state).unwrap();
         let fuel_req = soroban_vm::invoke(&engine_id, "p_fuel", &[], &mut state).unwrap();
@@ -155,7 +153,7 @@ impl super::Task for Asteroids {
 
         let mut results = vec![];
 
-        for val in vec![_user_solve_result, points_req.0, fuel_req.0, pos_req.0] {
+        for val in vec![user_solve_result, points_req.0, fuel_req.0, pos_req.0] {
             let mut buf = Vec::new();
             let _ = val.write_xdr(&mut buf);
             results.push(base64::engine::general_purpose::STANDARD.encode(&buf));
@@ -168,7 +166,7 @@ impl super::Task for Asteroids {
             submission_time: exec_time,
             result_xdr: results,
             opt: vec![],
-            interface_version: soroban_env_host::meta::INTERFACE_VERSION, // TODO,
+            interface_version: soroban_env_host::meta::INTERFACE_VERSION,
         }))
     }
 }

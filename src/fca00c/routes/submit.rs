@@ -70,8 +70,8 @@ pub async fn handle(
     }
 
     BasicJsonResponse::new(
-        "Successfully completed challenge. Data was not stored",
-        200,
+        "Unexpected error while computing the solution",
+        500,
     )
     .into()
 }
