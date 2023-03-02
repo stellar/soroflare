@@ -1,11 +1,9 @@
 use std::collections::HashMap;
 
-use crate::{
-    fca00c::{
-        response::{BasicJsonResponse, JsonResponse},
-        tasks::TaskResult,
-        TaskRegistry,
-    },
+use crate::fca00c::{
+    response::{BasicJsonResponse, JsonResponse},
+    tasks::TaskResult,
+    TaskRegistry,
 };
 use serde::Serialize;
 use worker::{Request, Response, RouteContext};
@@ -17,9 +15,7 @@ pub async fn handle(
     // extract task
     let get_query: HashMap<_, _> = req.url()?.query_pairs().into_owned().collect();
 
-    let task = get_query
-        .get("task")
-        .and_then(|b| b.parse::<u64>().ok());
+    let task = get_query.get("task").and_then(|b| b.parse::<u64>().ok());
 
     if task.is_none() {
         return BasicJsonResponse::new("No integer value specified for `task`", 400).into();
@@ -63,15 +59,9 @@ pub async fn handle(
 
         // task completed sucessfully
         return JsonResponse::new("Successfully completed challenge", 200)
-            .with_opt(Resp {
-                submission: result,
-            })
+            .with_opt(Resp { submission: result })
             .into();
     }
 
-    BasicJsonResponse::new(
-        "Unexpected error while computing the solution",
-        500,
-    )
-    .into()
+    BasicJsonResponse::new("Unexpected error while computing the solution", 500).into()
 }

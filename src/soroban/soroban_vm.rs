@@ -73,7 +73,9 @@ pub fn invoke_with_budget(
     {
         state.ledger_entries.push((
             Box::new(source_account_ledger_key),
-            Box::new(soroban_env_utils::default_account_ledger_entry(source_account.clone())),
+            Box::new(soroban_env_utils::default_account_ledger_entry(
+                source_account.clone(),
+            )),
         ));
     }
 
