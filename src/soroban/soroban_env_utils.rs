@@ -1,4 +1,4 @@
-// https://github.com/stellar/soroban-tools/blob/baa984478214a32b714a2206fed500cb91e0209b/cmd/soroban-cli/src/utils.rs
+// https://github.com/stellar/soroban-tools/blob/638fa06de23fcf7e0cab3eb8ed0dcf22e3d6d367/cmd/soroban-cli/src/utils.rs
 #![allow(dead_code)]
 use std::{io::ErrorKind, path::Path};
 

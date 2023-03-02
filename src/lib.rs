@@ -17,19 +17,15 @@ fn log_request(req: &Request) {
 
 #[event(fetch, respond_with_errors)]
 pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Response> {
-    let mut task_reg = TaskRegistry::default();
-
-    fca00c::setup(&mut task_reg);
-
-    task_reg.debug = matches!(
-        env.var("ENVIRONMENT")?.to_string().as_str(),
-        "local" | "dev"
-    );
+    // Optionally, get more helpful error messages written to the console in the case of a panic.
+    utils::set_panic_hook();
 
     log_request(&req);
 
-    // Optionally, get more helpful error messages written to the console in the case of a panic.
-    utils::set_panic_hook();
+    let mut task_reg = TaskRegistry::default();
+    fca00c::setup(&mut task_reg);
+
+    task_reg.debug = true;
 
     let mut router = Router::with_data(task_reg.clone());
     router = router

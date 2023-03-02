@@ -6,7 +6,6 @@ use crate::{
         tasks::TaskResult,
         TaskRegistry,
     },
-    utils::Flatten,
 };
 use serde::Serialize;
 use worker::{Request, Response, RouteContext};
@@ -20,7 +19,7 @@ pub async fn handle(
 
     let task = get_query
         .get("task")
-        .and_then(|b| b.parse::<u64>().flatten());
+        .and_then(|b| b.parse::<u64>().ok());
 
     if task.is_none() {
         return BasicJsonResponse::new("No integer value specified for `task`", 400).into();

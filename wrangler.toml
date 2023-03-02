@@ -1,6 +1,6 @@
 workers_dev = true
-compatibility_date = "2023-02-02"
-account_id = "ba55b7ae9acfb3ed152103e3497c0752"
+compatibility_date = "2023-03-02"
+account_id = ""
 usage_model = "unbound"
 
 main = "build/worker/shim.mjs"

@@ -1,3 +1,5 @@
+// This file includes a slightly modified version of the soroban-cli invoke command
+// (https://github.com/stellar/soroban-tools/blob/638fa06de23fcf7e0cab3eb8ed0dcf22e3d6d367/cmd/soroban-cli/src/contract/invoke.rs)
 use std::rc::Rc;
 
 use soroban_env_host::{
@@ -5,15 +7,15 @@ use soroban_env_host::{
     events::Events,
     storage::Storage,
     xdr::{
-        AccountEntry, AccountEntryExt, AccountId, HostFunction, LedgerEntry, LedgerEntryData,
-        LedgerEntryExt, LedgerKey, LedgerKeyAccount, PublicKey, ScHostStorageErrorCode, ScObject,
-        ScStatus, ScVal, ScVec, SequenceNumber, StringM, Thresholds, Uint256, VecM,
+        AccountId, HostFunction, LedgerKey, LedgerKeyAccount, PublicKey, ScHostStorageErrorCode,
+        ScObject, ScStatus, ScVal, ScVec, Uint256,
     },
     Host, HostError,
 };
 
 use super::soroban_env_utils;
 
+// https://github.com/stellar/soroban-tools/blob/638fa06de23fcf7e0cab3eb8ed0dcf22e3d6d367/cmd/soroban-cli/src/contract/invoke.rs#L429-L446
 pub fn deploy(
     src: &[u8],
     contract_id: &[u8; 32],
@@ -43,6 +45,7 @@ pub fn invoke(
     invoke_with_budget(contract_id, fn_name, args, state, None)
 }
 
+/// "basically" https://github.com/stellar/soroban-tools/blob/638fa06de23fcf7e0cab3eb8ed0dcf22e3d6d367/cmd/soroban-cli/src/contract/invoke.rs#L311-L427
 pub fn invoke_with_budget(
     contract_id: &[u8; 32],
     fn_name: &str,
@@ -50,11 +53,7 @@ pub fn invoke_with_budget(
     state: &mut soroban_ledger_snapshot::LedgerSnapshot,
     budget: Option<Budget>,
 ) -> Result<(ScVal, (Storage, Budget, Events)), Error> {
-    let budget = if let Some(b) = budget {
-        b
-    } else {
-        Budget::default()
-    };
+    let budget = budget.unwrap_or_default();
 
     // Create source account, adding it to the ledger if not already present.
     let source_account = AccountId(PublicKey::PublicKeyTypeEd25519(Uint256(
@@ -74,7 +73,7 @@ pub fn invoke_with_budget(
     {
         state.ledger_entries.push((
             Box::new(source_account_ledger_key),
-            Box::new(default_account_ledger_entry(source_account.clone())),
+            Box::new(soroban_env_utils::default_account_ledger_entry(source_account.clone())),
         ));
     }
 
@@ -96,8 +95,6 @@ pub fn invoke_with_budget(
 
     complete_args.append(&mut args.to_vec());
 
-    //todo add arguments
-
     let host_function_params: ScVec = complete_args.try_into().unwrap();
 
     let res = h.invoke_function(HostFunction::InvokeContract(host_function_params))?;
@@ -117,30 +114,4 @@ pub fn invoke_with_budget(
 pub enum Error {
     #[error(transparent)]
     Host(#[from] HostError),
-}
-
-pub fn default_account_ledger_entry(account_id: AccountId) -> LedgerEntry {
-    // TODO: Consider moving the definition of a default account ledger entry to
-    // a location shared by the SDK and CLI. The SDK currently defines the same
-    // value (see URL below). There's some benefit in only defining this once to
-    // prevent the two from diverging, which would cause inconsistent test
-    // behavior between the SDK and CLI. A good home for this is unclear at this
-    // time.
-    // https://github.com/stellar/rs-soroban-sdk/blob/b6f9a2c7ec54d2d5b5a1e02d1e38ae3158c22e78/soroban-sdk/src/accounts.rs#L470-L483.
-    LedgerEntry {
-        data: LedgerEntryData::Account(AccountEntry {
-            account_id,
-            balance: 0,
-            flags: 0,
-            home_domain: StringM::default(),
-            inflation_dest: None,
-            num_sub_entries: 0,
-            seq_num: SequenceNumber(0),
-            thresholds: Thresholds([1; 4]),
-            signers: VecM::default(),
-            ext: AccountEntryExt::V0,
-        }),
-        last_modified_ledger_seq: 0,
-        ext: LedgerEntryExt::V0,
-    }
 }

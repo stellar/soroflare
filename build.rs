@@ -5,7 +5,7 @@ use std::{
     path::Path,
 };
 
-const WASM_PATH: &str = "../";
+const WASM_PATH: &str = "./";
 
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");

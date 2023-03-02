@@ -10,16 +10,3 @@ cfg_if! {
         pub fn set_panic_hook() {}
     }
 }
-
-pub trait Flatten<T> {
-    fn flatten(self) -> Option<T>;
-}
-
-impl<T, U> Flatten<T> for Result<T, U> {
-    fn flatten(self) -> Option<T> {
-        match self {
-            Err(_) => None,
-            Ok(v) => Some(v),
-        }
-    }
-}
