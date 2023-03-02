@@ -1,4 +1,7 @@
-.DS_Store
-/target/
-.soroban
-.env
+/target
+**/*.rs.bk
+wasm-pack.log
+build/
+dist/
+node_module/
+*.db
