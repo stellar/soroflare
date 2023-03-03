@@ -7,8 +7,7 @@ build: install_worker_build
 	worker-build --release
 
 install_worker_build:
-# this version has a bug fix we require https://github.com/cloudflare/workers-rs/issues/255
-	cargo install --git https://github.com/Smephite/workers-rs.git 
+	cargo install worker-build
 
 local: build
 	wrangler dev --local
