@@ -29,7 +29,7 @@ hex = "0.4.3"
 sha2 = "0.10.6"
 thiserror = "1.0.31"
 
-soroban-env-host = "0.0.14"
+soroban-env-host = {version = "0.0.14", features = ["vm", "serde", "hostfn_log_fmt_values"] }
 soroban-spec = "0.6.0"
 soroban-ledger-snapshot = "0.6.0"
 stellar-strkey = "0.0.7"
