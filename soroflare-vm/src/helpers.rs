@@ -1,6 +1,7 @@
 use soroban_env_host::xdr::{BytesM, Error, ScObject, ScVal, ScVec};
 
 // create [u8; 32] from single u64, first 24 entires will be zero.
+#[macro_export]
 macro_rules! contract_id {
     ($num:expr) => {
         [
@@ -39,8 +40,6 @@ macro_rules! contract_id {
         ]
     };
 }
-
-pub(crate) use contract_id;
 
 pub struct ScValHelper(ScVal);
 

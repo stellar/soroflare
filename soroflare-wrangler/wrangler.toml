@@ -8,8 +8,6 @@ rules = [{ globs=["**/*.wasm"], type = "CompiledWasm", fallthrough = false }]
 build = { command = "worker-build --release" }
 
 # Staging environment as default
-name = "fca00c-dev"
+name = "soroflare-dev"
 
 vars = { ENVIRONMENT = "dev", ASTEROIDS_SEED="8891", SOROBAN_CPU_BUDGET="16000000000" }
-# Necessary secrets are:
-# - JWT_SECRET

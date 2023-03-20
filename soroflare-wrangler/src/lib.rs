@@ -1,9 +1,16 @@
-use fca00c::TaskRegistry;
+use tasks::TaskRegistry;
 use worker::{console_log, event, Cors, Date, Env, Method, Request, Response, Result, Router};
 
-mod fca00c;
-mod soroban;
 mod utils;
+mod embedded;
+mod routes;
+mod response;
+mod tasks;
+
+
+pub fn setup(reg: &mut TaskRegistry) {
+    tasks::setup(reg);
+}
 
 fn log_request(req: &Request) {
     console_log!(
@@ -23,14 +30,14 @@ pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Respo
     log_request(&req);
 
     let mut task_reg = TaskRegistry::default();
-    fca00c::setup(&mut task_reg);
+    tasks::setup(&mut task_reg);
 
     task_reg.debug = true;
 
     let mut router = Router::with_data(task_reg.clone());
     router = router
         .options("/submit", |_req, _ctx| Response::empty())
-        .post_async("/submit", fca00c::routes::submit::handle);
+        .post_async("/submit", routes::submit::handle);
 
     let cors = Cors::new()
         .with_allowed_headers(["*"])

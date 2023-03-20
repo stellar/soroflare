@@ -4,16 +4,16 @@ install_wasm_opt:
 	cargo install wasm-opt
 
 build: install_worker_build
-	worker-build --release
+	cd soroflare-wrangler; worker-build --release
 
 install_worker_build:
 	cargo install worker-build
 
 local: build
-	wrangler dev --local
+	cd soroflare-wrangler; wrangler dev --local
 
 dev: build
-	wrangler dev
+	cd soroflare-wrangler; wrangler dev
 
 clean:
 	cargo clean
