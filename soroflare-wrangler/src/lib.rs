@@ -1,12 +1,11 @@
 use tasks::TaskRegistry;
 use worker::{console_log, event, Cors, Date, Env, Method, Request, Response, Result, Router};
 
-mod utils;
 mod embedded;
-mod routes;
 mod response;
+mod routes;
 mod tasks;
-
+mod utils;
 
 pub fn setup(reg: &mut TaskRegistry) {
     tasks::setup(reg);

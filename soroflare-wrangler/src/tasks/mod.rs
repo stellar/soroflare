@@ -7,7 +7,6 @@ use worker::{Request, Response, RouteContext};
 
 use self::asteroids::Asteroids;
 
-
 pub fn setup(reg: &mut TaskRegistry) {
     // register future tasks here!
     reg.register_task(0, &Asteroids);
@@ -34,7 +33,6 @@ pub struct TaskResult {
     #[serde(skip)]
     pub opt: Vec<String>,
 }
-
 
 #[derive(Default, Clone)]
 pub struct TaskRegistry<'a> {
