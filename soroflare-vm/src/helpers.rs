@@ -1,4 +1,4 @@
-use soroban_env_host::xdr::{BytesM, Error, ScObject, ScVal, ScVec};
+use soroban_env_host::xdr::{Error, ScBytes, ScVal, ScVec};
 
 // create [u8; 32] from single u64, first 24 entires will be zero.
 #[macro_export]
@@ -55,14 +55,12 @@ impl From<ScValHelper> for ScVal {
     }
 }
 
+
 // BytesN<32>
 
 impl From<[u8; 32]> for ScValHelper {
     fn from(value: [u8; 32]) -> Self {
-        ScVal::Object(Some(ScObject::Bytes(
-            BytesM::try_from(value.to_vec()).unwrap(),
-        )))
-        .into()
+        ScVal::Bytes(ScBytes::try_from(value.to_vec()).unwrap()).into()
     }
 }
 
@@ -79,8 +77,6 @@ where
             .iter()
             .map(move |b| b.to_owned().into())
             .collect::<Vec<ScVal>>();
-        Ok(ScValHelper(ScVal::Object(Some(ScObject::Vec(
-            ScVec::try_from(v)?,
-        )))))
+        Ok(ScValHelper(ScVal::Vec(Some(ScVec::try_from(v)?))))
     }
 }

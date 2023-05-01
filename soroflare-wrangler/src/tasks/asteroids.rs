@@ -7,7 +7,7 @@ use soroban_env_host::{
     budget::Budget,
     xdr::{ScVal, WriteXdr},
 };
-use soroflare_vm::{contract_id, helpers::ScValHelper, soroban_env_utils, soroban_vm};
+use soroflare_vm::{contract_id, helpers::*, soroban_vm, soroflare_utils};
 use worker::{Request, Response, RouteContext};
 
 use super::TaskResult;
@@ -25,7 +25,7 @@ impl super::Task for Asteroids {
         let exec_time = chrono::Utc::now().timestamp_millis();
         let engine_id = contract_id!(0);
 
-        let mut state = soroban_env_utils::empty_ledger_snapshot();
+        let mut state = soroflare_utils::empty_ledger_snapshot();
         let deploy_engine_result =
             soroban_vm::deploy(&contracts::ASTEROIDS_ENGINE, &engine_id, &mut state);
 
@@ -104,7 +104,7 @@ impl super::Task for Asteroids {
         let solution_solve_result = soroban_vm::invoke_with_budget(
             &solution_id,
             "solve",
-            &[ScValHelper::from(engine_id).into()],
+            &vec![ScValHelper::from(engine_id).into()],
             &mut state,
             Some(advanced_budget),
         );
@@ -126,9 +126,9 @@ impl super::Task for Asteroids {
         }
         let (user_solve_result, (_, user_solve_budget, _)) = solution_solve_result.unwrap();
 
-        let points_req = soroban_vm::invoke(&engine_id, "p_points", &[], &mut state).unwrap();
-        let fuel_req = soroban_vm::invoke(&engine_id, "p_fuel", &[], &mut state).unwrap();
-        let pos_req = soroban_vm::invoke(&engine_id, "p_pos", &[], &mut state).unwrap();
+        let points_req = soroban_vm::invoke(&engine_id, "p_points", &vec![], &mut state).unwrap();
+        let fuel_req = soroban_vm::invoke(&engine_id, "p_fuel", &vec![], &mut state).unwrap();
+        let pos_req = soroban_vm::invoke(&engine_id, "p_pos", &vec![], &mut state).unwrap();
 
         let cpu_count = user_solve_budget.get_cpu_insns_count();
         let mem_count = user_solve_budget.get_mem_bytes_count();
