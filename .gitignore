@@ -5,3 +5,7 @@ build/
 dist/
 node_module/
 *.db
+
+.DS_LITE/
+.soroban/
+.vscode/
