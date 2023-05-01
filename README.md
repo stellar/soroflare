@@ -1,4 +1,8 @@
 # Soroflare
+> Careful:  
+> This repository is an early stage of development.   
+> It is not recommended to use this code in an production enviroment!
+
 This repository contains the environment and virtual machine running as the backbone for the [FCA00C][fca00c] contest.  
 
 ## Virtual Machine 
