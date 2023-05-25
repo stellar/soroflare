@@ -24,7 +24,6 @@ use stellar_strkey::ed25519::PrivateKey;
 
 use super::network::sandbox_network_id;
 
-
 /// # Errors
 ///
 /// Might return an error
@@ -185,7 +184,7 @@ pub fn get_contract_spec_from_storage(
                     }),
                 ..
             } => match c {
-                ScContractExecutable::Token => unimplemented!("Tokens are not yet implemented."),//{
+                ScContractExecutable::Token => unimplemented!("Tokens are not yet implemented."), //{
                 //     let res = soroban_spec::read::parse_raw(&Spec::spec_xdr());
                 //     res.map_err(FromWasmError::Parse)
                 // }
