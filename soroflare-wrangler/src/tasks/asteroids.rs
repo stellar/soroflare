@@ -5,7 +5,7 @@ use crate::{
 };
 use soroban_env_host::{
     budget::Budget,
-    xdr::{ScVal, WriteXdr},
+    xdr::{Hash, ScAddress, ScVal, WriteXdr},
 };
 use soroflare_vm::{contract_id, helpers::*, soroban_vm, soroflare_utils};
 use worker::{Request, Response, RouteContext};
@@ -104,7 +104,7 @@ impl super::Task for Asteroids {
         let solution_solve_result = soroban_vm::invoke_with_budget(
             &solution_id,
             "solve",
-            &vec![ScValHelper::from(engine_id).into()],
+            &vec![ScVal::Address(ScAddress::Contract(Hash::from(engine_id)))],
             &mut state,
             Some(advanced_budget),
         );
