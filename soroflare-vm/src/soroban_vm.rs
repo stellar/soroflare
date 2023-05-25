@@ -8,8 +8,8 @@ use soroban_env_host::{
     events::Events,
     storage::Storage,
     xdr::{
-        AccountId, HostFunction, LedgerKey, LedgerKeyAccount, PublicKey, ScBytes,
-        ScHostStorageErrorCode, ScSpecEntry, ScStatus, ScVal, ScVec, Uint256,
+        AccountId, HostFunction, HostFunctionArgs, LedgerKey, LedgerKeyAccount, PublicKey, ScBytes,
+        ScHostStorageErrorCode, ScSpecEntry, ScStatus, ScVal, ScVec, Uint256, VecM,
     },
     Host, HostError,
 };
@@ -17,7 +17,7 @@ use soroban_spec::read::FromWasmError;
 
 use crate::soroban_cli::{self, strval::Spec};
 
-// https://github.com/stellar/soroban-tools/blob/01cdac0a03fa04399c392f374f3dae0f91a86039/cmd/soroban-cli/src/commands/contract/invoke.rs#L457-L474
+// https://github.com/stellar/soroban-tools/blob/v0.8.0/cmd/soroban-cli/src/commands/contract/invoke.rs#L405-L422
 pub fn deploy(
     src: &[u8],
     contract_id: &[u8; 32],
@@ -47,7 +47,7 @@ pub fn invoke(
     invoke_with_budget(contract_id, fn_name, args, state, None)
 }
 
-/// "basically" https://github.com/stellar/soroban-tools/blob/01cdac0a03fa04399c392f374f3dae0f91a86039/cmd/soroban-cli/src/commands/contract/invoke.rs#L339-L455
+/// "basically" https://github.com/stellar/soroban-tools/blob/v0.8.0/cmd/soroban-cli/src/commands/contract/invoke.rs#L306-L403
 pub fn invoke_with_budget(
     contract_id: &[u8; 32],
     fn_name: &str,
@@ -105,12 +105,26 @@ pub fn invoke_with_budget(
 
     // complete_args.append(&mut args.to_vec());
 
-    let (_, _, host_function_params) =
+    let (_, spec, host_function_params) =
         build_host_function_parameters(*contract_id, &spec_entries, fn_name, args)?;
+
+    // h.set_diagnostic_level(soroban_env_host::DiagnosticLevel::Debug); // could be interesting as an added argument
 
     // let host_function_params: ScVec = complete_args.try_into().unwrap();
 
-    let res = h.invoke_function(HostFunction::InvokeContract(host_function_params))?;
+    let res = h
+        .invoke_functions(vec![HostFunction {
+            args: HostFunctionArgs::InvokeContract(host_function_params),
+            auth: VecM::default(),
+        }])
+        .map_err(|host_error| {
+            if let Ok(error) = spec.find_error_type(host_error.status.get_code()) {
+                Error::ContractInvoke(error.name.to_string_lossy(), error.doc.to_string_lossy())
+            } else {
+                host_error.into()
+            }
+        })?[0]
+        .clone();
 
     state.update(&h);
 
@@ -123,7 +137,7 @@ pub fn invoke_with_budget(
     Ok((res, (storage, budget, events)))
 }
 
-// https://github.com/stellar/soroban-tools/blob/01cdac0a03fa04399c392f374f3dae0f91a86039/cmd/soroban-cli/src/commands/contract/invoke.rs#LL162C5-L221C6
+// https://github.com/stellar/soroban-tools/blob/v0.8.0/cmd/soroban-cli/src/commands/contract/invoke.rs#L211-L233
 fn build_host_function_parameters(
     contract_id: [u8; 32],
     spec_entries: &[ScSpecEntry],
@@ -175,4 +189,6 @@ pub enum Error {
     FunctionNameTooLong(String),
     #[error("argument count ({current}) surpasses maximum allowed count ({maximum})")]
     MaxNumberOfArgumentsReached { current: usize, maximum: usize },
+    #[error("Contract Error\n{0}: {1}")]
+    ContractInvoke(String, String),
 }

@@ -3,7 +3,7 @@ target/
 wasm-pack.log
 build/
 dist/
-node_module/
+node_modules/
 *.db
 
 .DS_LITE/

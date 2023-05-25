@@ -5,9 +5,9 @@ edition = "2021"
 publish = false
 
 [dependencies]
-soroban-env-host = {version = "0.0.15", features = ["vm", "serde", "hostfn_log_fmt_values"] }
-soroban-spec = "0.7.0"
-soroban-ledger-snapshot = "0.7.0"
+soroban-env-host = {version = "0.0.16", features = ["vm", "serde", "hostfn_log_fmt_values"] }
+soroban-spec = "0.8.0"
+soroban-ledger-snapshot = "0.8.0"
 stellar-strkey = "0.0.7"
 ed25519-dalek = "1.0.1"
 hex = "0.4.3"

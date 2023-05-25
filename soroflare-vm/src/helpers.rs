@@ -55,7 +55,6 @@ impl From<ScValHelper> for ScVal {
     }
 }
 
-
 // BytesN<32>
 
 impl From<[u8; 32]> for ScValHelper {
