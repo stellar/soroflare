@@ -24,7 +24,7 @@ base64 = "0.21.0"
 worker = "0.0.13"
 
 
-soroban-env-host = {version = "0.0.16", features = ["vm", "serde", "hostfn_log_fmt_values"] }
+soroban-env-host = {version = "20.0.0-rc2", features = [] }
 soroflare-vm = { path = "../soroflare-vm" }
 
 
