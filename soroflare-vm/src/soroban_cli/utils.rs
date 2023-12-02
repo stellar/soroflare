@@ -19,7 +19,7 @@ use soroban_env_host::{
         TransactionSignaturePayloadTaggedTransaction, TransactionV1Envelope, VecM, WriteXdr,
     },
 };
-use soroban_sdk::token;
+//use soroban_sdk::token;
 
 use soroban_ledger_snapshot::LedgerSnapshot;
 use soroban_spec::read::FromWasmError;
@@ -245,11 +245,8 @@ pub fn get_contract_spec_from_state(
                 }),
             ..
         } => match executable {
-            ContractExecutable::Token => {
-                // TODO/FIXME: I don't think it will work for token contracts, since we don't store them in the state?
-                let res = soroban_spec::read::parse_raw(&token::StellarAssetSpec::spec_xdr());
-                res.map_err(FromWasmError::Parse)
-            }
+            // Note: this woudlnd't have worked before anyways.
+            ContractExecutable::Token => panic!("soroflare can't handle SACs"),
             ContractExecutable::Wasm(hash) => {
                 // It's a contract code entry, so it should have an expiration if present
                 let (entry, expiration_ledger_seq) = match get_entry_from_snapshot(
