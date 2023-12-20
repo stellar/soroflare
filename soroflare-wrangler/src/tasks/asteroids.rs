@@ -5,7 +5,7 @@ use crate::{
 };
 use soroban_env_host::{
     budget::Budget,
-    xdr::{Hash, ScAddress, ScVal, WriteXdr},
+    xdr::{Hash, ScAddress, ScVal, WriteXdr, Limits, ContractCostParams},
 };
 use soroflare_vm::{contract_id, helpers::*, soroban_vm, soroflare_utils};
 use worker::{Request, Response, RouteContext};
@@ -99,8 +99,7 @@ impl super::Task for Asteroids {
             .unwrap_or(None)
             .unwrap_or(u64::MAX);
 
-        let advanced_budget = Budget::default();
-        advanced_budget.reset_limits(cpu_limit, u64::MAX);
+            let advanced_budget = Budget::try_from_configs(cpu_limit, u64::MAX, ContractCostParams::default(), ContractCostParams::default()).unwrap();
 
         let solution_solve_result = soroban_vm::invoke_with_budget(
             &solution_id,
@@ -152,7 +151,7 @@ impl super::Task for Asteroids {
         for val in vec![user_solve_result, points_req.0, fuel_req.0, pos_req.0] {
             //let mut buf = Vec::new();
             //let _ = val.write_xdr(&mut buf);
-            results.push(base64::engine::general_purpose::STANDARD.encode(&val.to_xdr().unwrap())); // unwrap should be safe
+            results.push(base64::engine::general_purpose::STANDARD.encode(&val.to_xdr(Limits::none()).unwrap())); // unwrap should be safe
         }
 
         Ok(Some(TaskResult {

@@ -12,9 +12,7 @@ crate-type = ["cdylib", "rlib"]
 default = ["console_error_panic_hook"]
 
 [dependencies.soroban-env-host]
-version = "20.0.0-rc2"
-git = "https://github.com/stellar/rs-soroban-env"
-rev = "8c63bff68a15d79aca3a705ee6916a68db57b7e6"
+version = "20.0.0"
 
 [dependencies]
 cfg-if = "0.1.2"
@@ -26,7 +24,7 @@ time = "0.1.45"
 erased-serde = "0.3.24"
 chrono = "0.4.23"
 base64 = "0.21.0"
-worker = "0.0.18"
+worker = "0.0.17"
 
 soroflare-vm = { path = "../soroflare-vm" }
 
