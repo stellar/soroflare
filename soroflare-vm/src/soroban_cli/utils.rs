@@ -16,7 +16,7 @@ use soroban_env_host::{
         LedgerKey, LedgerKeyContractCode, LedgerKeyContractData, ScAddress, ScContractInstance,
         ScSpecEntry, ScVal, SequenceNumber, Signature, SignatureHint, String32, Thresholds,
         Transaction, TransactionEnvelope, TransactionSignaturePayload,
-        TransactionSignaturePayloadTaggedTransaction, TransactionV1Envelope, VecM, WriteXdr,
+        TransactionSignaturePayloadTaggedTransaction, TransactionV1Envelope, VecM, WriteXdr, Limits,
     },
 };
 //use soroban_sdk::token;
@@ -49,9 +49,9 @@ pub fn ledger_snapshot_read_or_default(
                 // rs-soroban-sdk, but if we don't have them the sandbox doesn't work right.
                 // Oof.
                 // TODO: Remove this hacky workaround.
-                min_persistent_entry_expiration: 4096,
-                min_temp_entry_expiration: 16,
-                max_entry_expiration: 6_312_000,
+                min_persistent_entry_ttl: 4096,
+                min_temp_entry_ttl: 16,
+                max_entry_ttl: 6_312_000,
                 ..Default::default()
             })
         }
@@ -160,7 +160,7 @@ pub fn transaction_hash(tx: &Transaction, network_passphrase: &str) -> Result<[u
         network_id: Hash(Sha256::digest(network_passphrase).into()),
         tagged_transaction: TransactionSignaturePayloadTaggedTransaction::Tx(tx.clone()),
     };
-    Ok(Sha256::digest(signature_payload.to_xdr()?).into())
+    Ok(Sha256::digest(signature_payload.to_xdr(Limits::none())?).into())
 }
 
 /// # Errors
@@ -226,15 +226,19 @@ pub fn get_contract_spec_from_state(
         key: ScVal::LedgerKeyContractInstance,
         durability: ContractDataDurability::Persistent,
     });
-    let (entry, expiration_ledger_seq) = match get_entry_from_snapshot(&key, &state.ledger_entries)
-    {
+    println!("searching");
+    let (entry, expiration_ledger_seq) = get_entry_from_snapshot(&key, &state.ledger_entries).unwrap();
+    /*{
         // It's a contract data entry, so it should have an expiration if present
         Some((entry, expiration)) => (entry, expiration.unwrap()),
         None => return Err(FromWasmError::NotFound),
-    };
-    if expiration_ledger_seq <= current_ledger_seq {
-        return Err(FromWasmError::NotFound);
-    }
+    };*/
+
+    println!("found");
+
+    //if expiration_ledger_seq.unwrap() <= current_ledger_seq {
+        //return Err(FromWasmError::NotFound);
+    //}
 
     match *entry {
         LedgerEntry {
@@ -246,7 +250,7 @@ pub fn get_contract_spec_from_state(
             ..
         } => match executable {
             // Note: this woudlnd't have worked before anyways.
-            ContractExecutable::Token => panic!("soroflare can't handle SACs"),
+            ContractExecutable::StellarAsset => panic!("soroflare can't handle SACs yet"), // todo: handle this to return error to the user.
             ContractExecutable::Wasm(hash) => {
                 // It's a contract code entry, so it should have an expiration if present
                 let (entry, expiration_ledger_seq) = match get_entry_from_snapshot(
@@ -257,9 +261,9 @@ pub fn get_contract_spec_from_state(
                     Some((entry, expiration)) => (entry, expiration.unwrap()),
                     None => return Err(FromWasmError::NotFound),
                 };
-                if expiration_ledger_seq <= current_ledger_seq {
-                    return Err(FromWasmError::NotFound);
-                }
+                //if expiration_ledger_seq <= current_ledger_seq {
+                    //return Err(FromWasmError::NotFound);
+                //}
                 match *entry {
                     LedgerEntry {
                         data: LedgerEntryData::ContractCode(ContractCodeEntry { code, .. }),

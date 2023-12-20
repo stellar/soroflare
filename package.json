@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "npx": "^10.2.2",
+    "wrangler": "^3.22.0"
+  }
+}

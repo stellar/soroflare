@@ -17,6 +17,7 @@ use soroban_env_host::{
 use soroban_spec_tools::Spec;
 
 use soroban_spec::read::FromWasmError;
+use worker::console_log;
 
 use crate::soroban_cli::{self};
 
@@ -28,7 +29,7 @@ pub fn deploy(
     let wasm_hash = soroban_cli::utils::add_contract_code_to_ledger_entries(
         &mut state.ledger_entries,
         src.to_vec(),
-        state.min_persistent_entry_expiration,
+        state.min_persistent_entry_ttl,
     )
     .map_err(Error::CannotAddContractToLedgerEntries)?
     .0;
@@ -37,7 +38,7 @@ pub fn deploy(
         &mut state.ledger_entries,
         *contract_id,
         wasm_hash,
-        state.min_persistent_entry_expiration,
+        state.min_persistent_entry_ttl,
     );
 
     Ok(())
@@ -52,7 +53,6 @@ pub fn invoke(
     invoke_with_budget(contract_id, fn_name, args, state, None)
 }
 
-/// "basically" https://github.com/stellar/soroban-tools/blob/v0.8.0/cmd/soroban-cli/src/commands/contract/invoke.rs#L306-L403
 pub fn invoke_with_budget(
     contract_id: &[u8; 32],
     fn_name: &str,
@@ -91,11 +91,17 @@ pub fn invoke_with_budget(
 
     let snap = Rc::new(state.clone());
     let storage = Storage::with_recording_footprint(snap);
+    
+    console_log!("try find entries");
+
     let spec_entries = soroban_cli::utils::get_contract_spec_from_state(&state, *contract_id)
         .map_err(Error::CannotParseContractSpec)?;
 
+        console_log!("\nfound entries yay {:?}", spec_entries);
+
     let h = Host::with_storage_and_budget(storage, budget);
-    h.switch_to_recording_auth(true)?;
+    
+//    h.switch_to_recording_auth(true)?;
     h.set_source_account(source_account)?;
     h.set_base_prng_seed(rand::Rng::gen(&mut rand::thread_rng()))?;
 
@@ -112,6 +118,8 @@ pub fn invoke_with_budget(
 
     // complete_args.append(&mut args.to_vec());
 
+    console_log!("before build params");
+
     let (spec, host_function_params) =
         build_host_function_parameters(*contract_id, &spec_entries, fn_name, args)?;
 
@@ -119,20 +127,24 @@ pub fn invoke_with_budget(
 
     // let host_function_params: ScVec = complete_args.try_into().unwrap();
 
+    console_log!("Panic occurs after this log");
+
     let res = h
         .invoke_function(HostFunction::InvokeContract(host_function_params))
         .map_err(|host_error| {
             if let Ok(error) = spec.find_error_type(host_error.error.get_code()) {
-                Error::ContractInvoke(error.name.to_string_lossy(), error.doc.to_string_lossy())
+                Error::ContractInvoke(error.name.to_utf8_string_lossy(), error.doc.to_utf8_string_lossy())
             } else {
                 host_error.into()
             }
         })?;
 
+    console_log!("I won't be logged");
+
     state.update(&h);
 
     // it seems that currently we don't need to deal with auth.
-
+    
     let budget = h.budget_cloned();
     let (storage, events) = h.try_finish()?;
 
