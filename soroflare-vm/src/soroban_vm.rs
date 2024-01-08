@@ -1,5 +1,10 @@
+// Update:
+// Leaving the below comments though now with the updates the code is now quite different
+// and doesn't have the same logic.
+ 
 // This file includes a slightly modified version of the soroban-cli invoke command
 // (https://github.com/stellar/soroban-tools/blob/35d33ee0c00e6b8bb49df534b9427ed45b080b48/cmd/soroban-cli/src/commands/contract/invoke.rs)
+
 use std::rc::Rc;
 
 use hex::FromHexError;
@@ -9,7 +14,7 @@ use soroban_env_host::{
     storage::Storage,
     xdr::{
         AccountId, Error as XdrError, Hash, HostFunction, InvokeContractArgs, LedgerKey,
-        LedgerKeyAccount, PublicKey, ScAddress, ScBytes, ScSpecEntry, ScSymbol, ScVal, ScVec,
+        LedgerKeyAccount, PublicKey, ScAddress, ScSpecEntry, ScSymbol, ScVal, ScVec,
         StringM, Uint256,
     },
     Host, HostError,
@@ -17,7 +22,7 @@ use soroban_env_host::{
 use soroban_spec_tools::Spec;
 
 use soroban_spec::read::FromWasmError;
-use worker::console_log;
+// use worker::console_log;
 
 use crate::soroban_cli::{self};
 
@@ -62,7 +67,8 @@ pub fn invoke_with_budget(
 ) -> Result<(ScVal, (Storage, Budget, Events)), Error> {
     let budget = budget.unwrap_or_default();
 
-    // Create source account, adding it to the ledger if not already present.
+    // Create source account adding it to the ledger.
+    // This is a default address, currently further customization is not needed.
     let source_account = AccountId(PublicKey::PublicKeyTypeEd25519(Uint256(
         stellar_strkey::ed25519::PublicKey::from_string(
             "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
@@ -70,9 +76,11 @@ pub fn invoke_with_budget(
         .unwrap()
         .0,
     )));
+
     let source_account_ledger_key = LedgerKey::Account(LedgerKeyAccount {
         account_id: source_account.clone(),
     });
+
     if !state
         .ledger_entries
         .iter()
@@ -91,17 +99,12 @@ pub fn invoke_with_budget(
 
     let snap = Rc::new(state.clone());
     let storage = Storage::with_recording_footprint(snap);
-    
-    console_log!("try find entries");
 
     let spec_entries = soroban_cli::utils::get_contract_spec_from_state(&state, *contract_id)
         .map_err(Error::CannotParseContractSpec)?;
 
-        console_log!("\nfound entries yay {:?}", spec_entries);
-
     let h = Host::with_storage_and_budget(storage, budget);
-    
-//    h.switch_to_recording_auth(true)?;
+
     h.set_source_account(source_account)?;
     h.set_base_prng_seed(rand::Rng::gen(&mut rand::thread_rng()))?;
 
@@ -110,41 +113,27 @@ pub fn invoke_with_budget(
     ledger_info.timestamp += 5;
     h.set_ledger_info(ledger_info.clone())?;
 
-    // // build_host_function_parameters
-    // let mut complete_args = vec![
-    //     ScVal::Object(Some(ScObject::Bytes(contract_id.try_into().unwrap()))),
-    //     ScVal::Symbol(fn_name.try_into().unwrap()),
-    // ];
-
-    // complete_args.append(&mut args.to_vec());
-
-    console_log!("before build params");
-
     let (spec, host_function_params) =
         build_host_function_parameters(*contract_id, &spec_entries, fn_name, args)?;
-
-    // h.set_diagnostic_level(soroban_env_host::DiagnosticLevel::Debug); // could be interesting as an added argument
-
-    // let host_function_params: ScVec = complete_args.try_into().unwrap();
-
-    console_log!("Panic occurs after this log");
 
     let res = h
         .invoke_function(HostFunction::InvokeContract(host_function_params))
         .map_err(|host_error| {
             if let Ok(error) = spec.find_error_type(host_error.error.get_code()) {
-                Error::ContractInvoke(error.name.to_utf8_string_lossy(), error.doc.to_utf8_string_lossy())
+                Error::ContractInvoke(
+                    error.name.to_utf8_string_lossy(),
+                    error.doc.to_utf8_string_lossy(),
+                )
             } else {
                 host_error.into()
             }
         })?;
 
-    console_log!("I won't be logged");
-
     state.update(&h);
 
-    // it seems that currently we don't need to deal with auth.
-    
+    // Note:
+    // currently we don't need to deal with auth.
+
     let budget = h.budget_cloned();
     let (storage, events) = h.try_finish()?;
 
@@ -162,14 +151,7 @@ fn build_host_function_parameters(
     let spec = Spec(Some(spec_entries.to_vec()));
 
     // Add the contract ID and the function name to the arguments
-    let mut complete_args = vec![
-        ScVal::Bytes(ScBytes(contract_id.try_into().unwrap())),
-        ScVal::Symbol(
-            fn_name
-                .try_into()
-                .map_err(|_| Error::FunctionNameTooLong(fn_name.to_string()))?,
-        ),
-    ];
+    let mut complete_args = vec![];
     complete_args.extend_from_slice(parsed_args.as_slice());
     let complete_args_len = complete_args.len();
 

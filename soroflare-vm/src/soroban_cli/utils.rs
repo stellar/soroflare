@@ -13,10 +13,10 @@ use soroban_env_host::{
         AccountEntry, AccountEntryExt, AccountId, ContractCodeEntry, ContractDataDurability,
         ContractDataEntry, ContractExecutable, DecoratedSignature, Error as XdrError,
         ExtensionPoint, Hash, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerFootprint,
-        LedgerKey, LedgerKeyContractCode, LedgerKeyContractData, ScAddress, ScContractInstance,
-        ScSpecEntry, ScVal, SequenceNumber, Signature, SignatureHint, String32, Thresholds,
-        Transaction, TransactionEnvelope, TransactionSignaturePayload,
-        TransactionSignaturePayloadTaggedTransaction, TransactionV1Envelope, VecM, WriteXdr, Limits,
+        LedgerKey, LedgerKeyContractCode, LedgerKeyContractData, Limits, ScAddress,
+        ScContractInstance, ScSpecEntry, ScVal, SequenceNumber, Signature, SignatureHint, String32,
+        Thresholds, Transaction, TransactionEnvelope, TransactionSignaturePayload,
+        TransactionSignaturePayloadTaggedTransaction, TransactionV1Envelope, VecM, WriteXdr,
     },
 };
 //use soroban_sdk::token;
@@ -220,26 +220,19 @@ pub fn get_contract_spec_from_state(
     state: &LedgerSnapshot,
     contract_id: [u8; 32],
 ) -> Result<Vec<ScSpecEntry>, FromWasmError> {
-    let current_ledger_seq = state.sequence_number;
+    // Note:
+    // We're not dealing with state expiration since it makes no sense
+    // to do so in an execution that always spins up a brand-new ledger.
+    
     let key = LedgerKey::ContractData(LedgerKeyContractData {
         contract: ScAddress::Contract(contract_id.into()),
         key: ScVal::LedgerKeyContractInstance,
         durability: ContractDataDurability::Persistent,
     });
     println!("searching");
-    let (entry, expiration_ledger_seq) = get_entry_from_snapshot(&key, &state.ledger_entries).unwrap();
-    /*{
-        // It's a contract data entry, so it should have an expiration if present
-        Some((entry, expiration)) => (entry, expiration.unwrap()),
-        None => return Err(FromWasmError::NotFound),
-    };*/
-
-    println!("found");
-
-    //if expiration_ledger_seq.unwrap() <= current_ledger_seq {
-        //return Err(FromWasmError::NotFound);
-    //}
-
+    let (entry, _) =
+        get_entry_from_snapshot(&key, &state.ledger_entries).unwrap();
+    
     match *entry {
         LedgerEntry {
             data:
@@ -249,11 +242,14 @@ pub fn get_contract_spec_from_state(
                 }),
             ..
         } => match executable {
-            // Note: this woudlnd't have worked before anyways.
-            ContractExecutable::StellarAsset => panic!("soroflare can't handle SACs yet"), // todo: handle this to return error to the user.
+            ContractExecutable::StellarAsset => {
+                // soroflare can't handle SACs yet
+                // returning Not
+                return Err(FromWasmError::UsedSAC)
+            }, // todo: handle this?
             ContractExecutable::Wasm(hash) => {
                 // It's a contract code entry, so it should have an expiration if present
-                let (entry, expiration_ledger_seq) = match get_entry_from_snapshot(
+                let (entry, _) = match get_entry_from_snapshot(
                     &LedgerKey::ContractCode(LedgerKeyContractCode { hash: hash.clone() }),
                     &state.ledger_entries,
                 ) {
@@ -261,9 +257,7 @@ pub fn get_contract_spec_from_state(
                     Some((entry, expiration)) => (entry, expiration.unwrap()),
                     None => return Err(FromWasmError::NotFound),
                 };
-                //if expiration_ledger_seq <= current_ledger_seq {
-                    //return Err(FromWasmError::NotFound);
-                //}
+                
                 match *entry {
                     LedgerEntry {
                         data: LedgerEntryData::ContractCode(ContractCodeEntry { code, .. }),

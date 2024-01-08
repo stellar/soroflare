@@ -6,16 +6,16 @@ publish = false
 
 
 [dependencies.soroban-env-host]
-version = "20.0.0"
+path = "../../rs-soroban-env/soroban-env-host"
 
 [dependencies.soroban-spec]
-version = "20.0.0"
+path = "../../rs-soroban-sdk/soroban-spec"
 
 [dependencies.soroban-ledger-snapshot]
-version = "20.0.0"
+path = "../../rs-soroban-sdk/soroban-ledger-snapshot"
 
 [dependencies.soroban-spec-tools]
-version = "20.0.0"
+path = "../../soroban-tools/cmd/crates/soroban-spec-tools"
 
 [dependencies]
 base64 = "0.21.2"
