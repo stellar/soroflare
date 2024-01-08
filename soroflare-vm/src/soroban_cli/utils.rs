@@ -243,10 +243,10 @@ pub fn get_contract_spec_from_state(
             ..
         } => match executable {
             ContractExecutable::StellarAsset => {
-                // soroflare can't handle SACs yet
-                // returning Not
-                return Err(FromWasmError::UsedSAC)
-            }, // todo: handle this?
+                panic!("soroflare can't handle direct SACs invocations") // NB: this code is actually never going to be executed since
+                                                                         // it would require the user to have loaded a SAC which is not possible.
+               
+            },
             ContractExecutable::Wasm(hash) => {
                 // It's a contract code entry, so it should have an expiration if present
                 let (entry, _) = match get_entry_from_snapshot(
