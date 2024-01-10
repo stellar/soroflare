@@ -7,10 +7,13 @@ pub mod soroflare_utils;
 pub mod token;
 
 
-// Easy and simple way of printing XDR arguments to supply to Soroflare.n
+// Easy and simple way of printing XDR arguments to supply to Soroflare.
 #[test]
 fn generate_scvec() {
     let symbol = ScVal::Symbol(ScSymbol("tdep".to_string().try_into().unwrap()));
     let vec = ScVec(VecM::try_from(vec![symbol]).unwrap());
-    println!("{:?}", vec.to_xdr_base64(Limits::none()).unwrap());
+    let val = ScVal::Vec(Some(vec));
+    
+    println!("{:?}", val.to_xdr_base64(Limits::none()).unwrap());
 }
+

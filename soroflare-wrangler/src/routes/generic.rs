@@ -7,7 +7,7 @@ use crate::{
 use serde::Serialize;
 use soroban_env_host::{
     budget::Budget,
-    xdr::{Limits, ReadXdr, ScVec, WriteXdr},
+    xdr::{Limits, ReadXdr, ScVec, WriteXdr, ScVal},
 };
 use soroflare_vm::{contract_id, soroban_vm, soroflare_utils};
 use worker::{Request, Response, RouteContext};
@@ -38,7 +38,7 @@ impl Generic {
             return Err(BasicJsonResponse::new("No fname", 400).into());
         };
         let params = if let Some(xdr) = get_query.get("params") {
-            if let Ok(vec) = ScVec::from_xdr_base64(xdr, Limits::none()) {
+            if let Ok(ScVal::Vec(Some(vec))) = ScVal::from_xdr_base64(xdr, Limits::none()) {
                 vec
             } else {
                 return Err(BasicJsonResponse::new("Invalid params", 400).into());
