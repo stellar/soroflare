@@ -11,6 +11,9 @@ crate-type = ["cdylib", "rlib"]
 [features]
 default = ["console_error_panic_hook"]
 
+[dependencies.soroban-env-host]
+path = "../../rs-soroban-env/soroban-env-host"
+
 [dependencies]
 cfg-if = "0.1.2"
 serde_json = "1.0.67"
@@ -21,12 +24,10 @@ time = "0.1.45"
 erased-serde = "0.3.24"
 chrono = "0.4.23"
 base64 = "0.21.0"
-worker = "0.0.13"
-
-
-soroban-env-host = {version = "0.0.16", features = ["vm", "serde", "hostfn_log_fmt_values"] }
+worker = "0.0.17"
+sha2 = "0.10.8"
 soroflare-vm = { path = "../soroflare-vm" }
-
+hex = "0.4.3"
 
 
 # The `console_error_panic_hook` crate provides better debugging of panics by

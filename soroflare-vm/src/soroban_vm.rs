@@ -1,5 +1,10 @@
+// Update:
+// Leaving the below comments though now with the updates the code is now quite different
+// and doesn't have the same logic.
+ 
 // This file includes a slightly modified version of the soroban-cli invoke command
-// (https://github.com/stellar/soroban-tools/blob/01cdac0a03fa04399c392f374f3dae0f91a86039/cmd/soroban-cli/src/commands/contract/invoke.rs)
+// (https://github.com/stellar/soroban-tools/blob/35d33ee0c00e6b8bb49df534b9427ed45b080b48/cmd/soroban-cli/src/commands/contract/invoke.rs)
+
 use std::rc::Rc;
 
 use hex::FromHexError;
@@ -8,31 +13,37 @@ use soroban_env_host::{
     events::Events,
     storage::Storage,
     xdr::{
-        AccountId, HostFunction, HostFunctionArgs, LedgerKey, LedgerKeyAccount, PublicKey, ScBytes,
-        ScHostStorageErrorCode, ScSpecEntry, ScStatus, ScVal, ScVec, Uint256, VecM,
+        AccountId, Error as XdrError, Hash, HostFunction, InvokeContractArgs, LedgerKey,
+        LedgerKeyAccount, PublicKey, ScAddress, ScSpecEntry, ScSymbol, ScVal, ScVec,
+        StringM, Uint256,
     },
     Host, HostError,
 };
+use soroban_spec_tools::Spec;
+
 use soroban_spec::read::FromWasmError;
+// use worker::console_log;
 
-use crate::soroban_cli::{self, strval::Spec};
+use crate::soroban_cli::{self};
 
-// https://github.com/stellar/soroban-tools/blob/v0.8.0/cmd/soroban-cli/src/commands/contract/invoke.rs#L405-L422
 pub fn deploy(
     src: &[u8],
-    contract_id: &[u8; 32],
     state: &mut soroban_ledger_snapshot::LedgerSnapshot,
-) -> Result<(), soroban_env_host::xdr::Error> {
+    contract_id: &[u8; 32],
+) -> Result<(), Error> {
     let wasm_hash = soroban_cli::utils::add_contract_code_to_ledger_entries(
         &mut state.ledger_entries,
         src.to_vec(),
-    )?
+        state.min_persistent_entry_ttl,
+    )
+    .map_err(Error::CannotAddContractToLedgerEntries)?
     .0;
 
     soroban_cli::utils::add_contract_to_ledger_entries(
         &mut state.ledger_entries,
         *contract_id,
         wasm_hash,
+        state.min_persistent_entry_ttl,
     );
 
     Ok(())
@@ -47,7 +58,6 @@ pub fn invoke(
     invoke_with_budget(contract_id, fn_name, args, state, None)
 }
 
-/// "basically" https://github.com/stellar/soroban-tools/blob/v0.8.0/cmd/soroban-cli/src/commands/contract/invoke.rs#L306-L403
 pub fn invoke_with_budget(
     contract_id: &[u8; 32],
     fn_name: &str,
@@ -57,7 +67,8 @@ pub fn invoke_with_budget(
 ) -> Result<(ScVal, (Storage, Budget, Events)), Error> {
     let budget = budget.unwrap_or_default();
 
-    // Create source account, adding it to the ledger if not already present.
+    // Create source account adding it to the ledger.
+    // This is a default address, currently further customization is not needed.
     let source_account = AccountId(PublicKey::PublicKeyTypeEd25519(Uint256(
         stellar_strkey::ed25519::PublicKey::from_string(
             "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
@@ -65,9 +76,11 @@ pub fn invoke_with_budget(
         .unwrap()
         .0,
     )));
+
     let source_account_ledger_key = LedgerKey::Account(LedgerKeyAccount {
         account_id: source_account.clone(),
     });
+
     if !state
         .ledger_entries
         .iter()
@@ -75,105 +88,96 @@ pub fn invoke_with_budget(
     {
         state.ledger_entries.push((
             Box::new(source_account_ledger_key),
-            Box::new(soroban_cli::utils::default_account_ledger_entry(
-                source_account.clone(),
-            )),
+            (
+                Box::new(soroban_cli::utils::default_account_ledger_entry(
+                    source_account.clone(),
+                )),
+                None,
+            ),
         ));
     }
 
     let snap = Rc::new(state.clone());
-    let mut storage = Storage::with_recording_footprint(snap);
-    let spec_entries =
-        soroban_cli::utils::get_contract_spec_from_storage(&mut storage, *contract_id)
-            .map_err(Error::CannotParseContractSpec)?;
+    let storage = Storage::with_recording_footprint(snap);
+
+    let spec_entries = soroban_cli::utils::get_contract_spec_from_state(&state, *contract_id)
+        .map_err(Error::CannotParseContractSpec)?;
 
     let h = Host::with_storage_and_budget(storage, budget);
-    h.set_source_account(source_account);
 
-    //TODO auth_next
+    h.set_source_account(source_account)?;
+    h.set_base_prng_seed(rand::Rng::gen(&mut rand::thread_rng()))?;
 
     let mut ledger_info = state.ledger_info();
     ledger_info.sequence_number += 1;
     ledger_info.timestamp += 5;
-    h.set_ledger_info(ledger_info);
+    h.set_ledger_info(ledger_info.clone())?;
 
-    // // build_host_function_parameters
-    // let mut complete_args = vec![
-    //     ScVal::Object(Some(ScObject::Bytes(contract_id.try_into().unwrap()))),
-    //     ScVal::Symbol(fn_name.try_into().unwrap()),
-    // ];
+    
 
-    // complete_args.append(&mut args.to_vec());
-
-    let (_, spec, host_function_params) =
+    let (spec, host_function_params) =
         build_host_function_parameters(*contract_id, &spec_entries, fn_name, args)?;
 
-    // h.set_diagnostic_level(soroban_env_host::DiagnosticLevel::Debug); // could be interesting as an added argument
-
-    // let host_function_params: ScVec = complete_args.try_into().unwrap();
-
+    
     let res = h
-        .invoke_functions(vec![HostFunction {
-            args: HostFunctionArgs::InvokeContract(host_function_params),
-            auth: VecM::default(),
-        }])
+        .invoke_function(HostFunction::InvokeContract(host_function_params))
         .map_err(|host_error| {
-            if let Ok(error) = spec.find_error_type(host_error.status.get_code()) {
-                Error::ContractInvoke(error.name.to_string_lossy(), error.doc.to_string_lossy())
+            if let Ok(error) = spec.find_error_type(host_error.error.get_code()) {
+                Error::ContractInvoke(
+                    error.name.to_utf8_string_lossy(),
+                    error.doc.to_utf8_string_lossy(),
+                )
             } else {
                 host_error.into()
             }
-        })?[0]
-        .clone();
+        })?;
 
     state.update(&h);
 
-    let (storage, budget, events) = h.try_finish().map_err(|_h| {
-        HostError::from(ScStatus::HostStorageError(
-            ScHostStorageErrorCode::UnknownError,
-        ))
-    })?;
+    // Note:
+    // currently we don't need to deal with auth.
+
+    let budget = h.budget_cloned();
+    let (storage, events) = h.try_finish()?;
 
     Ok((res, (storage, budget, events)))
 }
 
-// https://github.com/stellar/soroban-tools/blob/v0.8.0/cmd/soroban-cli/src/commands/contract/invoke.rs#L211-L233
+// a modified version of https://github.com/stellar/soroban-tools/blob/v0.8.0/cmd/soroban-cli/src/commands/contract/invoke.rs#L211-L233
+// applied for the new InvokeContractArgs type.
 fn build_host_function_parameters(
     contract_id: [u8; 32],
     spec_entries: &[ScSpecEntry],
     fn_name: &str,
     parsed_args: &Vec<ScVal>,
-) -> Result<(String, Spec, ScVec), Error> {
+) -> Result<(Spec, InvokeContractArgs), Error> {
     let spec = Spec(Some(spec_entries.to_vec()));
 
     // Add the contract ID and the function name to the arguments
-    let mut complete_args = vec![
-        ScVal::Bytes(ScBytes(contract_id.try_into().unwrap())),
-        ScVal::Symbol(
-            fn_name
-                .try_into()
-                .map_err(|_| Error::FunctionNameTooLong(fn_name.to_string()))?,
-        ),
-    ];
+    let mut complete_args = vec![];
     complete_args.extend_from_slice(parsed_args.as_slice());
     let complete_args_len = complete_args.len();
 
-    Ok((
-        fn_name.to_string(),
-        spec,
-        complete_args
+    let invoke_args = InvokeContractArgs {
+        contract_address: ScAddress::Contract(Hash(contract_id)),
+        function_name: ScSymbol(<_ as TryInto<StringM<32>>>::try_into(fn_name).unwrap()),
+        args: complete_args
             .try_into()
             .map_err(|_| Error::MaxNumberOfArgumentsReached {
                 current: complete_args_len,
                 maximum: ScVec::default().max_len(),
             })?,
-    ))
+    };
+
+    Ok((spec, invoke_args))
 }
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error(transparent)]
     Host(#[from] HostError),
+    #[error("cannot add contract to ledger entries: {0}")]
+    CannotAddContractToLedgerEntries(XdrError),
     #[error("cannot parse contract ID {contract_id}: {error}")]
     CannotParseContractId {
         contract_id: String,
@@ -184,11 +188,14 @@ pub enum Error {
     #[error("parsing contract spec: {0}")]
     CannotParseContractSpec(FromWasmError),
     #[error(transparent)]
-    StrVal(#[from] soroban_cli::strval::Error),
+    StrVal(#[from] soroban_spec_tools::Error),
     #[error("function name {0} is too long")]
     FunctionNameTooLong(String),
     #[error("argument count ({current}) surpasses maximum allowed count ({maximum})")]
     MaxNumberOfArgumentsReached { current: usize, maximum: usize },
     #[error("Contract Error\n{0}: {1}")]
     ContractInvoke(String, String),
+    
+    #[error("Invalid Snapshot provided")]
+    InvalidSnapshot,
 }

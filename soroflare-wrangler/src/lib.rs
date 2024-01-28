@@ -36,7 +36,11 @@ pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Respo
     let mut router = Router::with_data(task_reg.clone());
     router = router
         .options("/submit", |_req, _ctx| Response::empty())
-        .post_async("/submit", routes::submit::handle);
+        .post_async("/submit", routes::submit::handle)
+        .options("/execute", |_req, _ctx| Response::empty())
+        .post_async("/execute", routes::generic::handle)
+        .options("/executesnapshot", |_req, _ctx| Response::empty())
+        .post_async("/executesnapshot", routes::generic::handle_snapshot);
 
     let cors = Cors::new()
         .with_allowed_headers(["*"])

@@ -5,7 +5,7 @@ use crate::{
 };
 use soroban_env_host::{
     budget::Budget,
-    xdr::{Hash, ScAddress, ScVal, WriteXdr},
+    xdr::{ContractCostParams, Hash, Limits, ScAddress, ScVal, WriteXdr},
 };
 use soroflare_vm::{contract_id, helpers::*, soroban_vm, soroflare_utils};
 use worker::{Request, Response, RouteContext};
@@ -27,7 +27,7 @@ impl super::Task for Asteroids {
 
         let mut state = soroflare_utils::empty_ledger_snapshot();
         let deploy_engine_result =
-            soroban_vm::deploy(&contracts::ASTEROIDS_ENGINE, &engine_id, &mut state);
+            soroban_vm::deploy(&contracts::ASTEROIDS_ENGINE, &mut state, &engine_id);
 
         if deploy_engine_result.is_err() {
             return Err(BasicJsonResponse::new("Error deploying game engine contract", 500).into());
@@ -57,6 +57,9 @@ impl super::Task for Asteroids {
         // asteroid_density: u32,
         // pod_density: u32,
 
+        let vec: ScVal = ScValHelper::try_from(vec![50u32, 5u32, 2u32, 1u32])
+            .unwrap()
+            .into();
         let engine_init_args: Vec<ScVal> = vec![
             1u32.into(),
             3u32.into(),
@@ -64,9 +67,7 @@ impl super::Task for Asteroids {
             16u32.into(),
             // the unwrap() here is not nice but it _should_ work
             // tuples are stored as ScVecs
-            ScValHelper::try_from(vec![50u32, 5u32, 2u32, 1u32])
-                .unwrap()
-                .into(),
+            vec,
             1u32.into(),
             6u32.into(),
             2u32.into(),
@@ -83,7 +84,7 @@ impl super::Task for Asteroids {
 
         let solution_id = contract_id!(1);
 
-        let solution_deploy_result = soroban_vm::deploy(raw_wasm, &solution_id, &mut state);
+        let solution_deploy_result = soroban_vm::deploy(raw_wasm, &mut state, &solution_id);
 
         if let Err(e) = solution_deploy_result {
             return Err(JsonResponse::new("Failed to deploy user contract", 500)
@@ -98,8 +99,13 @@ impl super::Task for Asteroids {
             .unwrap_or(None)
             .unwrap_or(u64::MAX);
 
-        let advanced_budget = Budget::default();
-        advanced_budget.reset_limits(cpu_limit, u64::MAX);
+        let advanced_budget = Budget::try_from_configs(
+            cpu_limit,
+            u64::MAX,
+            ContractCostParams::default(),
+            ContractCostParams::default(),
+        )
+        .unwrap();
 
         let solution_solve_result = soroban_vm::invoke_with_budget(
             &solution_id,
@@ -130,8 +136,9 @@ impl super::Task for Asteroids {
         let fuel_req = soroban_vm::invoke(&engine_id, "p_fuel", &vec![], &mut state).unwrap();
         let pos_req = soroban_vm::invoke(&engine_id, "p_pos", &vec![], &mut state).unwrap();
 
-        let cpu_count = user_solve_budget.get_cpu_insns_count();
-        let mem_count = user_solve_budget.get_mem_bytes_count();
+        // todo: evaluate error handling for these
+        let cpu_count = user_solve_budget.get_cpu_insns_consumed().unwrap();
+        let mem_count = user_solve_budget.get_mem_bytes_consumed().unwrap();
 
         if let ScVal::U32(i) = points_req.0 {
             if i < 100u32 {
@@ -148,9 +155,12 @@ impl super::Task for Asteroids {
         let mut results = vec![];
 
         for val in vec![user_solve_result, points_req.0, fuel_req.0, pos_req.0] {
-            let mut buf = Vec::new();
-            let _ = val.write_xdr(&mut buf);
-            results.push(base64::engine::general_purpose::STANDARD.encode(&buf));
+            //let mut buf = Vec::new();
+            //let _ = val.write_xdr(&mut buf);
+            results.push(
+                base64::engine::general_purpose::STANDARD
+                    .encode(&val.to_xdr(Limits::none()).unwrap()),
+            ); // unwrap should be safe
         }
 
         Ok(Some(TaskResult {
