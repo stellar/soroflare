@@ -113,9 +113,12 @@ pub fn invoke_with_budget(
     ledger_info.timestamp += 5;
     h.set_ledger_info(ledger_info.clone())?;
 
+    
+
     let (spec, host_function_params) =
         build_host_function_parameters(*contract_id, &spec_entries, fn_name, args)?;
 
+    
     let res = h
         .invoke_function(HostFunction::InvokeContract(host_function_params))
         .map_err(|host_error| {
@@ -192,4 +195,7 @@ pub enum Error {
     MaxNumberOfArgumentsReached { current: usize, maximum: usize },
     #[error("Contract Error\n{0}: {1}")]
     ContractInvoke(String, String),
+    
+    #[error("Invalid Snapshot provided")]
+    InvalidSnapshot,
 }

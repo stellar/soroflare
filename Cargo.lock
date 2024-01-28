@@ -1192,7 +1192,7 @@ checksum = "4dccd0940a2dcdf68d092b8cbab7dc0ad8fa938bf95787e1b916b0e3d0e8e970"
 
 [[package]]
 name = "soroban-builtin-sdk-macros"
-version = "20.0.1"
+version = "20.1.0"
 dependencies = [
  "itertools 0.11.0",
  "proc-macro2",
@@ -1202,7 +1202,7 @@ dependencies = [
 
 [[package]]
 name = "soroban-env-common"
-version = "20.0.1"
+version = "20.1.0"
 dependencies = [
  "crate-git-revision",
  "ethnum",
@@ -1217,7 +1217,7 @@ dependencies = [
 
 [[package]]
 name = "soroban-env-host"
-version = "20.0.1"
+version = "20.1.0"
 dependencies = [
  "curve25519-dalek",
  "ed25519-dalek",
@@ -1241,7 +1241,7 @@ dependencies = [
 
 [[package]]
 name = "soroban-env-macros"
-version = "20.0.1"
+version = "20.1.0"
 dependencies = [
  "itertools 0.11.0",
  "proc-macro2",
@@ -1345,10 +1345,12 @@ dependencies = [
  "chrono",
  "console_error_panic_hook",
  "erased-serde",
+ "hex",
  "jwt-compact",
  "serde",
  "serde_json",
  "serde_yaml",
+ "sha2",
  "soroban-env-host",
  "soroflare-vm",
  "time 0.1.45",

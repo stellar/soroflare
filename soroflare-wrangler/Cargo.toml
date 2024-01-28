@@ -25,9 +25,9 @@ erased-serde = "0.3.24"
 chrono = "0.4.23"
 base64 = "0.21.0"
 worker = "0.0.17"
-
+sha2 = "0.10.8"
 soroflare-vm = { path = "../soroflare-vm" }
-
+hex = "0.4.3"
 
 
 # The `console_error_panic_hook` crate provides better debugging of panics by
