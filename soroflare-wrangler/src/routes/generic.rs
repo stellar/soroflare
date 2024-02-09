@@ -55,8 +55,13 @@ impl Generic {
             params,
         } = req.json().await.unwrap();
 
+        // todo: group all simulation-related errors in a specific errors enum and implement conversions
+        // to the RPC API for it.
         let mut wasm_hashes = Vec::new();
         for val in &vals {
+            if !val.is_live(ledger_sequence) {
+                return Err(JsonResponse::new("Entry is expired", 400).with_opt(val).into())
+            }
             if let LedgerEntryData::ContractData(contract_data) = &val.entry.data {
                 if let ScVal::ContractInstance(instance) = &contract_data.val {
                     if let ContractExecutable::Wasm(hash) = &instance.executable {

@@ -17,6 +17,16 @@ pub struct EntryWithLifetime {
     pub live_until: Option<u32>,
 }
 
+impl EntryWithLifetime {
+    pub fn is_live(&self, ledger_sequence: u32) -> bool {
+        if let Some(ttl) = self.live_until {
+            ledger_sequence < ttl
+        } else {
+            true // all other entries are always live
+        }
+    }
+}
+
 pub fn ledger_snapshot_from_entries_and_ledger(
     ledger_sequence: u32,
     keys: Vec<LedgerKey>,
