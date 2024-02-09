@@ -223,16 +223,15 @@ pub fn get_contract_spec_from_state(
     // Note:
     // We're not dealing with state expiration since it makes no sense
     // to do so in an execution that always spins up a brand-new ledger.
-    
+
     let key = LedgerKey::ContractData(LedgerKeyContractData {
         contract: ScAddress::Contract(contract_id.into()),
         key: ScVal::LedgerKeyContractInstance,
         durability: ContractDataDurability::Persistent,
     });
     println!("searching");
-    let (entry, _) =
-        get_entry_from_snapshot(&key, &state.ledger_entries).unwrap();
-    
+    let (entry, _) = get_entry_from_snapshot(&key, &state.ledger_entries).unwrap();
+
     match *entry {
         LedgerEntry {
             data:
@@ -245,8 +244,7 @@ pub fn get_contract_spec_from_state(
             ContractExecutable::StellarAsset => {
                 panic!("soroflare can't handle direct SACs invocations") // NB: this code is actually never going to be executed since
                                                                          // it would require the user to have loaded a SAC which is not possible.
-               
-            },
+            }
             ContractExecutable::Wasm(hash) => {
                 // It's a contract code entry, so it should have an expiration if present
                 let (entry, _) = match get_entry_from_snapshot(
@@ -257,7 +255,7 @@ pub fn get_contract_spec_from_state(
                     Some((entry, expiration)) => (entry, expiration.unwrap()),
                     None => return Err(FromWasmError::NotFound),
                 };
-                
+
                 match *entry {
                     LedgerEntry {
                         data: LedgerEntryData::ContractCode(ContractCodeEntry { code, .. }),

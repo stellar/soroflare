@@ -9,3 +9,4 @@ node_modules/
 .DS_LITE/
 .soroban/
 .vscode/
+.wrangler/

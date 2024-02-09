@@ -1,7 +1,7 @@
 // Update:
 // Leaving the below comments though now with the updates the code is now quite different
 // and doesn't have the same logic.
- 
+
 // This file includes a slightly modified version of the soroban-cli invoke command
 // (https://github.com/stellar/soroban-tools/blob/35d33ee0c00e6b8bb49df534b9427ed45b080b48/cmd/soroban-cli/src/commands/contract/invoke.rs)
 
@@ -14,8 +14,8 @@ use soroban_env_host::{
     storage::Storage,
     xdr::{
         AccountId, Error as XdrError, Hash, HostFunction, InvokeContractArgs, LedgerKey,
-        LedgerKeyAccount, PublicKey, ScAddress, ScSpecEntry, ScSymbol, ScVal, ScVec,
-        StringM, Uint256,
+        LedgerKeyAccount, PublicKey, ScAddress, ScSpecEntry, ScSymbol, ScVal, ScVec, StringM,
+        Uint256,
     },
     Host, HostError,
 };
@@ -113,12 +113,9 @@ pub fn invoke_with_budget(
     ledger_info.timestamp += 5;
     h.set_ledger_info(ledger_info.clone())?;
 
-    
-
     let (spec, host_function_params) =
         build_host_function_parameters(*contract_id, &spec_entries, fn_name, args)?;
 
-    
     let res = h
         .invoke_function(HostFunction::InvokeContract(host_function_params))
         .map_err(|host_error| {
@@ -195,7 +192,7 @@ pub enum Error {
     MaxNumberOfArgumentsReached { current: usize, maximum: usize },
     #[error("Contract Error\n{0}: {1}")]
     ContractInvoke(String, String),
-    
+
     #[error("Invalid Snapshot provided")]
     InvalidSnapshot,
 }

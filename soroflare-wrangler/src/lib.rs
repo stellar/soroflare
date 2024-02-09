@@ -22,7 +22,7 @@ fn log_request(req: &Request) {
 }
 
 #[event(fetch, respond_with_errors)]
-pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Response> {
+pub async fn main(req: Request, env: Env, ctx: worker::Context) -> Result<Response> {
     // Optionally, get more helpful error messages written to the console in the case of a panic.
     utils::set_panic_hook();
 
@@ -39,6 +39,8 @@ pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Respo
         .post_async("/submit", routes::submit::handle)
         .options("/execute", |_req, _ctx| Response::empty())
         .post_async("/execute", routes::generic::handle)
+        .options("/uploadwasm", |_req, _ctx| Response::empty())
+        .post_async("/uploadwasm", routes::generic::handle_upload)
         .options("/executesnapshot", |_req, _ctx| Response::empty())
         .post_async("/executesnapshot", routes::generic::handle_snapshot);
 

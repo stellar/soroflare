@@ -11,20 +11,30 @@ pub fn empty_ledger_snapshot() -> LedgerSnapshot {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct EntryWithLifetime {
     pub entry: LedgerEntry,
-    pub live_until: Option<u32>
+    pub live_until: Option<u32>,
 }
 
-pub fn ledger_snapshot_from_entries_and_ledger(ledger_sequence: u32, keys: Vec<LedgerKey>, vals: Vec<EntryWithLifetime>) -> Result<LedgerSnapshot, crate::soroban_vm::Error> {
+pub fn ledger_snapshot_from_entries_and_ledger(
+    ledger_sequence: u32,
+    keys: Vec<LedgerKey>,
+    vals: Vec<EntryWithLifetime>,
+) -> Result<LedgerSnapshot, crate::soroban_vm::Error> {
     let mut ledger_entries = Vec::new();
-    
+
     for (idx, key) in keys.iter().enumerate() {
         let entry_with_lifetime = &vals[idx];
-        ledger_entries.push((Box::new(key.clone()), (Box::new(entry_with_lifetime.entry.clone()), entry_with_lifetime.live_until)))
+        ledger_entries.push((
+            Box::new(key.clone()),
+            (
+                Box::new(entry_with_lifetime.entry.clone()),
+                entry_with_lifetime.live_until,
+            ),
+        ))
     }
-    
+
     Ok(LedgerSnapshot {
         network_id: sandbox_network_id(),
         sequence_number: ledger_sequence,

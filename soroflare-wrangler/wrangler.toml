@@ -11,3 +11,7 @@ build = { command = "worker-build --release" }
 name = "soroflare-dev"
 
 vars = { ENVIRONMENT = "dev", ASTEROIDS_SEED="8891", SOROBAN_CPU_BUDGET="16000000000" }
+
+kv_namespaces = [
+    { binding = "MODULES", id = "da0e5c7abc4d4209b1ec18579a71041c"}, 
+]
