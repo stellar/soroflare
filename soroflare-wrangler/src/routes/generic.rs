@@ -55,12 +55,14 @@ impl Generic {
             params,
         } = req.json().await.unwrap();
 
+        let mut expired_entries = Vec::new();
+
         // todo: group all simulation-related errors in a specific errors enum and implement conversions
         // to the RPC API for it.
         let mut wasm_hashes = Vec::new();
         for val in &vals {
             if !val.is_live(ledger_sequence) {
-                return Err(JsonResponse::new("Entry is expired", 400).with_opt(val).into())
+                expired_entries.push(val);
             }
             if let LedgerEntryData::ContractData(contract_data) = &val.entry.data {
                 if let ScVal::ContractInstance(instance) = &contract_data.val {
@@ -69,6 +71,12 @@ impl Generic {
                     }
                 }
             }
+        }
+
+        if !expired_entries.is_empty() {
+            return Err(JsonResponse::new("Expired entries", 200)
+                .with_opt(expired_entries)
+                .into());
         }
 
         let mut inferred_keys = Vec::new();
@@ -316,105 +324,110 @@ pub async fn handle_snapshot(
     }
 }
 
-#[test]
-fn generate_snapshot_request() {
-    let symbol = ScVal::Symbol(ScSymbol("tdep".to_string().try_into().unwrap()));
+mod test {
+    use super::*;
+    #[test]
+    fn generate_snapshot_request() {
+        let symbol = ScVal::Symbol(ScSymbol("tdep".to_string().try_into().unwrap()));
 
-    let binary = hex::decode("0061736d01000000010f0360027e7e017e60017e017e60000002070101760167000003030201020405017001010105030100100619037f01418080c0000b7f00418080c0000b7f00418080c0000b073105066d656d6f727902000568656c6c6f0001015f00020a5f5f646174615f656e6403010b5f5f686561705f6261736503020ac80102c20101027f23808080800041206b2201248080808000024002402000a741ff01712202410e460d00200241ca00470d010b200120003703082001428ee8f1d8ba02370300410021020340024020024110470d00410021020240034020024110460d01200141106a20026a200120026a290300370300200241086a21020c000b0b200141106aad4220864204844284808080201080808080002100200141206a24808080800020000f0b200141106a20026a4202370300200241086a21020c000b0b00000b02000b00430e636f6e747261637473706563763000000000000000000000000568656c6c6f000000000000010000000000000002746f00000000001100000001000003ea00000011001e11636f6e7472616374656e766d657461763000000000000000140000000000770e636f6e74726163746d6574617630000000000000000572737665720000000000000e312e37362e302d6e696768746c7900000000000000000008727373646b7665720000002f32302e302e30233832326365366363336534363163636339323532373562343732643737623663613335623263643900").unwrap();
-    println!("{:?}", binary);
-    let hash = Hash(Sha256::digest([0; 32].as_slice()).into());
-    let code_key = LedgerKey::ContractCode(LedgerKeyContractCode { hash: hash.clone() });
-    let code_entry = LedgerEntry {
-        last_modified_ledger_seq: 0,
-        data: LedgerEntryData::ContractCode(ContractCodeEntry {
-            ext: ExtensionPoint::V0,
-            hash: hash.clone(),
-            code: binary.try_into().unwrap(),
-        }),
-        ext: LedgerEntryExt::V0,
-    };
-
-    let contract_key = LedgerKey::ContractData(LedgerKeyContractData {
-        contract: ScAddress::Contract([0; 32].into()),
-        key: ScVal::LedgerKeyContractInstance,
-        durability: ContractDataDurability::Persistent,
-    });
-
-    let contract_entry = LedgerEntry {
-        last_modified_ledger_seq: 0,
-        data: LedgerEntryData::ContractData(ContractDataEntry {
-            contract: ScAddress::Contract([0; 32].into()),
-            key: ScVal::LedgerKeyContractInstance,
-            durability: ContractDataDurability::Persistent,
-            val: ScVal::ContractInstance(ScContractInstance {
-                executable: ContractExecutable::Wasm(hash),
-                storage: None,
+        let binary = hex::decode("0061736d01000000010f0360027e7e017e60017e017e60000002070101760167000003030201020405017001010105030100100619037f01418080c0000b7f00418080c0000b7f00418080c0000b073105066d656d6f727902000568656c6c6f0001015f00020a5f5f646174615f656e6403010b5f5f686561705f6261736503020ac80102c20101027f23808080800041206b2201248080808000024002402000a741ff01712202410e460d00200241ca00470d010b200120003703082001428ee8f1d8ba02370300410021020340024020024110470d00410021020240034020024110460d01200141106a20026a200120026a290300370300200241086a21020c000b0b200141106aad4220864204844284808080201080808080002100200141206a24808080800020000f0b200141106a20026a4202370300200241086a21020c000b0b00000b02000b00430e636f6e747261637473706563763000000000000000000000000568656c6c6f000000000000010000000000000002746f00000000001100000001000003ea00000011001e11636f6e7472616374656e766d657461763000000000000000140000000000770e636f6e74726163746d6574617630000000000000000572737665720000000000000e312e37362e302d6e696768746c7900000000000000000008727373646b7665720000002f32302e302e30233832326365366363336534363163636339323532373562343732643737623663613335623263643900").unwrap();
+        println!("{:?}", binary);
+        let hash = Hash(Sha256::digest([0; 32].as_slice()).into());
+        let code_key = LedgerKey::ContractCode(LedgerKeyContractCode { hash: hash.clone() });
+        let code_entry = LedgerEntry {
+            last_modified_ledger_seq: 0,
+            data: LedgerEntryData::ContractCode(ContractCodeEntry {
+                ext: ExtensionPoint::V0,
+                hash: hash.clone(),
+                code: binary.try_into().unwrap(),
             }),
-            ext: ExtensionPoint::V0,
-        }),
-        ext: LedgerEntryExt::V0,
-    };
+            ext: LedgerEntryExt::V0,
+        };
 
-    let snapshot = WithSnapshotInput {
-        ledger_sequence: 50,
-        keys: vec![code_key, contract_key],
-        vals: vec![
-            EntryWithLifetime {
-                entry: code_entry,
-                live_until: Some(100),
-            },
-            EntryWithLifetime {
-                entry: contract_entry,
-                live_until: Some(100),
-            },
-        ],
-        contract_id: [0; 32],
-        fname: String::from("hello"),
-        params: vec![symbol],
-    };
-    println!("{}", serde_json::json!(snapshot));
-}
-
-#[test]
-fn generate_snapshot_request_no_code() {
-    let symbol = ScVal::Symbol(ScSymbol("tdep".to_string().try_into().unwrap()));
-
-    let contract_key = LedgerKey::ContractData(LedgerKeyContractData {
-        contract: ScAddress::Contract([0; 32].into()),
-        key: ScVal::LedgerKeyContractInstance,
-        durability: ContractDataDurability::Persistent,
-    });
-
-    let contract_entry = LedgerEntry {
-        last_modified_ledger_seq: 0,
-        data: LedgerEntryData::ContractData(ContractDataEntry {
+        let contract_key = LedgerKey::ContractData(LedgerKeyContractData {
             contract: ScAddress::Contract([0; 32].into()),
             key: ScVal::LedgerKeyContractInstance,
             durability: ContractDataDurability::Persistent,
-            val: ScVal::ContractInstance(ScContractInstance {
-                executable: ContractExecutable::Wasm(Hash(
-                    hex::decode("ea3eacfb7157ad4cee0f5c1ea548a98aa9d93ab080a9fd28d093967be6a67028")
+        });
+
+        let contract_entry = LedgerEntry {
+            last_modified_ledger_seq: 0,
+            data: LedgerEntryData::ContractData(ContractDataEntry {
+                contract: ScAddress::Contract([0; 32].into()),
+                key: ScVal::LedgerKeyContractInstance,
+                durability: ContractDataDurability::Persistent,
+                val: ScVal::ContractInstance(ScContractInstance {
+                    executable: ContractExecutable::Wasm(hash),
+                    storage: None,
+                }),
+                ext: ExtensionPoint::V0,
+            }),
+            ext: LedgerEntryExt::V0,
+        };
+
+        let snapshot = WithSnapshotInput {
+            ledger_sequence: 50,
+            keys: vec![code_key, contract_key],
+            vals: vec![
+                EntryWithLifetime {
+                    entry: code_entry,
+                    live_until: Some(100),
+                },
+                EntryWithLifetime {
+                    entry: contract_entry,
+                    live_until: Some(100),
+                },
+            ],
+            contract_id: [0; 32],
+            fname: String::from("hello"),
+            params: vec![symbol],
+        };
+        println!("{}", serde_json::json!(snapshot));
+    }
+
+    #[test]
+    fn generate_snapshot_request_no_code() {
+        let symbol = ScVal::Symbol(ScSymbol("tdep".to_string().try_into().unwrap()));
+
+        let contract_key = LedgerKey::ContractData(LedgerKeyContractData {
+            contract: ScAddress::Contract([0; 32].into()),
+            key: ScVal::LedgerKeyContractInstance,
+            durability: ContractDataDurability::Persistent,
+        });
+
+        let contract_entry = LedgerEntry {
+            last_modified_ledger_seq: 0,
+            data: LedgerEntryData::ContractData(ContractDataEntry {
+                contract: ScAddress::Contract([0; 32].into()),
+                key: ScVal::LedgerKeyContractInstance,
+                durability: ContractDataDurability::Persistent,
+                val: ScVal::ContractInstance(ScContractInstance {
+                    executable: ContractExecutable::Wasm(Hash(
+                        hex::decode(
+                            "ea3eacfb7157ad4cee0f5c1ea548a98aa9d93ab080a9fd28d093967be6a67028",
+                        )
                         .unwrap()
                         .try_into()
                         .unwrap(),
-                )),
-                storage: None,
+                    )),
+                    storage: None,
+                }),
+                ext: ExtensionPoint::V0,
             }),
-            ext: ExtensionPoint::V0,
-        }),
-        ext: LedgerEntryExt::V0,
-    };
+            ext: LedgerEntryExt::V0,
+        };
 
-    let snapshot = WithSnapshotInput {
-        ledger_sequence: 50,
-        keys: vec![contract_key],
-        vals: vec![EntryWithLifetime {
-            entry: contract_entry,
-            live_until: Some(100),
-        }],
-        contract_id: [0; 32],
-        fname: String::from("hello"),
-        params: vec![symbol],
-    };
-    println!("{}", serde_json::json!(snapshot));
+        let snapshot = WithSnapshotInput {
+            ledger_sequence: 50,
+            keys: vec![contract_key],
+            vals: vec![EntryWithLifetime {
+                entry: contract_entry,
+                live_until: Some(100),
+            }],
+            contract_id: [0; 32],
+            fname: String::from("hello"),
+            params: vec![symbol],
+        };
+        println!("{}", serde_json::json!(snapshot));
+    }
 }
