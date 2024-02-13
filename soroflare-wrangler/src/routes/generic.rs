@@ -8,16 +8,12 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use soroban_env_host::{
-    budget::Budget,
-    xdr::{
-        BytesM, ContractCodeEntry, ContractDataDurability, ContractDataEntry, ContractExecutable,
-        ExtensionPoint, Hash, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey,
-        LedgerKeyContractCode, LedgerKeyContractData, Limits, ReadXdr, ScAddress,
-        ScContractInstance, ScSymbol, ScVal, ScVec, VecM, WriteXdr,
-    },
+    budget::Budget, events::Events, xdr::{
+        BytesM, ContractCodeEntry, ContractDataDurability, ContractDataEntry, ContractEvent, ContractExecutable, ExtensionPoint, Hash, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey, LedgerKeyContractCode, LedgerKeyContractData, Limits, ReadXdr, ScAddress, ScContractInstance, ScSymbol, ScVal, ScVec, VecM, WriteXdr
+    }
 };
 use soroflare_vm::{
-    contract_id, soroban_vm,
+    contract_id, soroban_vm::{self, InvocationResult},
     soroflare_utils::{self, EntryWithLifetime},
 };
 use worker::{console_log, kv::KvStore, Request, Response, RouteContext};
@@ -27,6 +23,7 @@ pub struct ExecutionResult {
     cpu: u64,
     mem: u64,
     result: String,
+    events: Vec<ContractEvent>
 }
 
 #[derive(Deserialize, Serialize)]
@@ -161,13 +158,14 @@ impl Generic {
         );
 
         if let Ok(res) = execution_result {
-            let (scval_result, (_, user_solve_budget, _)) = res;
-            let cpu = user_solve_budget.get_cpu_insns_consumed().unwrap();
-            let mem = user_solve_budget.get_mem_bytes_consumed().unwrap();
+            let InvocationResult { result, storage, budget, events } = res;
+            
+            let cpu = budget.get_cpu_insns_consumed().unwrap();
+            let mem = budget.get_mem_bytes_consumed().unwrap();
 
-            let result = scval_result.to_xdr_base64(Limits::none()).unwrap();
+            let result = result.to_xdr_base64(Limits::none()).unwrap();
 
-            Ok(ExecutionResult { cpu, mem, result })
+            Ok(ExecutionResult { cpu, mem, result, events })
         } else {
             return Err(JsonResponse::new("Failed to execute contract", 400)
                 .with_opt(execution_result.err().unwrap().to_string())
@@ -222,13 +220,14 @@ impl Generic {
         );
 
         if let Ok(res) = execution_result {
-            let (scval_result, (_, user_solve_budget, _)) = res;
-            let cpu = user_solve_budget.get_cpu_insns_consumed().unwrap();
-            let mem = user_solve_budget.get_mem_bytes_consumed().unwrap();
+            let InvocationResult { result, storage, budget, events } = res;
+            
+            let cpu = budget.get_cpu_insns_consumed().unwrap();
+            let mem = budget.get_mem_bytes_consumed().unwrap();
 
-            let result = scval_result.to_xdr_base64(Limits::none()).unwrap();
+            let result = result.to_xdr_base64(Limits::none()).unwrap();
 
-            Ok(ExecutionResult { cpu, mem, result })
+            Ok(ExecutionResult { cpu, mem, result, events })
         } else {
             return Err(JsonResponse::new("Failed to execute contract", 400)
                 .with_opt(execution_result.err().unwrap().to_string())

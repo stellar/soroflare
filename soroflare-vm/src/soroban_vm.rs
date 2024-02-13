@@ -13,9 +13,7 @@ use soroban_env_host::{
     events::Events,
     storage::Storage,
     xdr::{
-        AccountId, Error as XdrError, Hash, HostFunction, InvokeContractArgs, LedgerKey,
-        LedgerKeyAccount, PublicKey, ScAddress, ScSpecEntry, ScSymbol, ScVal, ScVec, StringM,
-        Uint256,
+        AccountId, ContractEvent, Error as XdrError, Hash, HostFunction, InvokeContractArgs, LedgerKey, LedgerKeyAccount, PublicKey, ScAddress, ScSpecEntry, ScSymbol, ScVal, ScVec, StringM, Uint256
     },
     Host, HostError,
 };
@@ -54,7 +52,7 @@ pub fn invoke(
     fn_name: &str,
     args: &Vec<ScVal>,
     state: &mut soroban_ledger_snapshot::LedgerSnapshot,
-) -> Result<(ScVal, (Storage, Budget, Events)), Error> {
+) -> Result<InvocationResult, Error> {
     invoke_with_budget(contract_id, fn_name, args, state, None)
 }
 
@@ -64,7 +62,7 @@ pub fn invoke_with_budget(
     args: &Vec<ScVal>,
     state: &mut soroban_ledger_snapshot::LedgerSnapshot,
     budget: Option<Budget>,
-) -> Result<(ScVal, (Storage, Budget, Events)), Error> {
+) -> Result<InvocationResult, Error> {
     let budget = budget.unwrap_or_default();
 
     // Create source account adding it to the ledger.
@@ -130,14 +128,26 @@ pub fn invoke_with_budget(
         })?;
 
     state.update(&h);
-
+    
     // Note:
     // currently we don't need to deal with auth.
 
     let budget = h.budget_cloned();
     let (storage, events) = h.try_finish()?;
 
-    Ok((res, (storage, budget, events)))
+    let events = events.0.iter().map(|e| {
+        e.event.clone()
+    }).collect::<Vec<ContractEvent>>();
+
+
+    Ok(
+        InvocationResult {
+            result: res,
+            storage,
+            budget,
+            events
+        }
+    )
 }
 
 // a modified version of https://github.com/stellar/soroban-tools/blob/v0.8.0/cmd/soroban-cli/src/commands/contract/invoke.rs#L211-L233
@@ -195,4 +205,11 @@ pub enum Error {
 
     #[error("Invalid Snapshot provided")]
     InvalidSnapshot,
+}
+
+pub struct InvocationResult {
+    pub result: ScVal,
+    pub storage: Storage,
+    pub budget: Budget,
+    pub events: Vec<ContractEvent>
 }

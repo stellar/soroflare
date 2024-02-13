@@ -7,7 +7,7 @@ use soroban_env_host::{
     budget::Budget,
     xdr::{ContractCostParams, Hash, Limits, ScAddress, ScVal, WriteXdr},
 };
-use soroflare_vm::{contract_id, helpers::*, soroban_vm, soroflare_utils};
+use soroflare_vm::{contract_id, helpers::*, soroban_vm::{self, InvocationResult}, soroflare_utils};
 use worker::{Request, Response, RouteContext};
 
 use super::TaskResult;
@@ -130,17 +130,19 @@ impl super::Task for Asteroids {
                     .into(),
             );
         }
-        let (user_solve_result, (_, user_solve_budget, _)) = solution_solve_result.unwrap();
+        
+        let InvocationResult { result, storage, budget, events } = solution_solve_result.unwrap();
+        //let (user_solve_result, (_, user_solve_budget, _)) = solution_solve_result.unwrap();
 
         let points_req = soroban_vm::invoke(&engine_id, "p_points", &vec![], &mut state).unwrap();
         let fuel_req = soroban_vm::invoke(&engine_id, "p_fuel", &vec![], &mut state).unwrap();
         let pos_req = soroban_vm::invoke(&engine_id, "p_pos", &vec![], &mut state).unwrap();
 
         // todo: evaluate error handling for these
-        let cpu_count = user_solve_budget.get_cpu_insns_consumed().unwrap();
-        let mem_count = user_solve_budget.get_mem_bytes_consumed().unwrap();
+        let cpu_count = budget.get_cpu_insns_consumed().unwrap();
+        let mem_count = budget.get_mem_bytes_consumed().unwrap();
 
-        if let ScVal::U32(i) = points_req.0 {
+        if let ScVal::U32(i) = points_req.result {
             if i < 100u32 {
                 return Err(BasicJsonResponse::new(
                     "User did not solve challenge! (points!=100)",
@@ -154,7 +156,7 @@ impl super::Task for Asteroids {
 
         let mut results = vec![];
 
-        for val in vec![user_solve_result, points_req.0, fuel_req.0, pos_req.0] {
+        for val in vec![result, points_req.result, fuel_req.result, pos_req.result] {
             //let mut buf = Vec::new();
             //let _ = val.write_xdr(&mut buf);
             results.push(
