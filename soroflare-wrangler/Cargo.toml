@@ -12,7 +12,7 @@ crate-type = ["cdylib", "rlib"]
 default = ["console_error_panic_hook"]
 
 [dependencies.soroban-env-host]
-path = "../../rs-soroban-env/soroban-env-host"
+version = "20.2.0"
 
 [dependencies]
 cfg-if = "0.1.2"

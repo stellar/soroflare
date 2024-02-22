@@ -9,7 +9,7 @@ use sha2::{Digest, Sha256};
 
 use soroban_env_host::{
     budget::Budget, events::Events, xdr::{
-        BytesM, ContractCodeEntry, ContractDataDurability, ContractDataEntry, ContractEvent, ContractExecutable, ExtensionPoint, Hash, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey, LedgerKeyContractCode, LedgerKeyContractData, Limits, ReadXdr, ScAddress, ScContractInstance, ScSymbol, ScVal, ScVec, VecM, WriteXdr
+        BytesM, ContractCodeEntry, ContractDataDurability, ContractDataEntry, ContractEvent, ContractExecutable, ExtensionPoint, Hash, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey, LedgerKeyContractCode, LedgerKeyContractData, Limits, ReadXdr, ScAddress, ScContractInstance, ScSymbol, ScVal, ScVec, VecM, WriteXdr, SorobanTransactionData, SorobanResources, LedgerFootprint
     }
 };
 use soroflare_vm::{
@@ -18,18 +18,39 @@ use soroflare_vm::{
 };
 use worker::{console_log, kv::KvStore, Request, Response, RouteContext};
 
-#[derive(Serialize)]
+#[derive(Serialize, Default)]
 pub struct ExecutionResult {
-    cpu: u64,
-    mem: u64,
-    result: String,
-    events: Vec<ContractEvent>
+    cost: Option<Cost>,
+    results: Option<Results>,
+    restorePreamble: Option<RestorePreamble>,    
+    events: Option<Vec<ContractEvent>>,
+    error: Option<String>
+}
+
+#[derive(Serialize, Default)]
+pub struct Cost {
+    cpuInsns: String,
+    memBytes: String,
+}
+
+#[derive(Serialize, Default)]
+pub struct Results {
+    auth: Vec<String>,
+    xdr: String,
+}
+
+/// Instructions for the client to restore any potentially expired
+/// ledger entries
+#[derive(Serialize, Default)]
+pub struct RestorePreamble {
+    min_resource_fee: String,
+    transaction_data: String,
 }
 
 #[derive(Deserialize, Serialize)]
 pub struct WithSnapshotInput {
     ledger_sequence: u32,
-    keys: Vec<LedgerKey>,
+    keys: Vec<LedgerKey>, // keys of vals need to have the same index within the array.
     vals: Vec<EntryWithLifetime>,
     contract_id: [u8; 32],
     fname: String,
@@ -43,6 +64,8 @@ impl Generic {
         req: &mut Request,
         modules: KvStore,
     ) -> Result<ExecutionResult, Result<Response, worker::Error>> {
+        let mut api_result = ExecutionResult::default();        
+
         let WithSnapshotInput {
             ledger_sequence,
             keys,
@@ -53,13 +76,15 @@ impl Generic {
         } = req.json().await.unwrap();
 
         let mut expired_entries = Vec::new();
+        let mut expired_keys = Vec::new();
 
         // todo: group all simulation-related errors in a specific errors enum and implement conversions
         // to the RPC API for it.
         let mut wasm_hashes = Vec::new();
-        for val in &vals {
+        for (idx, val) in vals.iter().enumerate() {
             if !val.is_live(ledger_sequence) {
                 expired_entries.push(val);
+                expired_keys.push(keys[idx].clone());
             }
             if let LedgerEntryData::ContractData(contract_data) = &val.entry.data {
                 if let ScVal::ContractInstance(instance) = &contract_data.val {
@@ -71,9 +96,24 @@ impl Generic {
         }
 
         if !expired_entries.is_empty() {
-            return Err(JsonResponse::new("Expired entries", 200)
-                .with_opt(expired_entries)
-                .into());
+            let txdata = SorobanTransactionData {
+                ext: ExtensionPoint::V0,
+                resource_fee: 0,
+                resources: SorobanResources {
+                    footprint: LedgerFootprint {
+                        read_only: VecM::default(),
+                        read_write: expired_keys.try_into().unwrap()
+                    },
+                    instructions: 0,
+                    read_bytes: 0,
+                    write_bytes: 0
+                }
+            };
+
+            api_result.restorePreamble = Some(RestorePreamble {
+                transaction_data: txdata.to_xdr_base64(Limits::none()).unwrap(),
+                min_resource_fee: "0".into()
+            });
         }
 
         let mut inferred_keys = Vec::new();
@@ -157,26 +197,40 @@ impl Generic {
             Some(advanced_budget),
         );
 
-        if let Ok(res) = execution_result {
-            let InvocationResult { result, storage, budget, events } = res;
-            
-            let cpu = budget.get_cpu_insns_consumed().unwrap();
-            let mem = budget.get_mem_bytes_consumed().unwrap();
+        match execution_result {
+            Ok(res) => {
+                let InvocationResult { result, budget, events, .. } = res;
+                
+                let cpu = budget.get_cpu_insns_consumed().unwrap();
+                let mem = budget.get_mem_bytes_consumed().unwrap();
+                let result = result.to_xdr_base64(Limits::none()).unwrap();
 
-            let result = result.to_xdr_base64(Limits::none()).unwrap();
+                api_result.events = Some(events);
 
-            Ok(ExecutionResult { cpu, mem, result, events })
-        } else {
-            return Err(JsonResponse::new("Failed to execute contract", 400)
-                .with_opt(execution_result.err().unwrap().to_string())
-                .into());
+                api_result.cost = Some(Cost {
+                    cpuInsns: cpu.to_string(),
+                    memBytes: mem.to_string()
+                });
+                
+                api_result.results = Some(Results {
+                    xdr: result,
+                    auth: vec![]
+                });
+
+                Ok(api_result)
+            },
+
+            Err(error) => {
+                api_result.error = Some(error.to_string());                
+                Ok(api_result)
+            }
         }
     }
 
     fn run(
         raw_wasm: &[u8],
         req: &Request,
-    ) -> Result<ExecutionResult, Result<Response, worker::Error>> {
+    ) -> Result<(u64, u64, String, Vec<ContractEvent>), Result<Response, worker::Error>> {
         let get_query: HashMap<_, _> = req
             .url()
             .map_err(|err| return Err::<Response, worker::Error>(err.into()))?
@@ -227,7 +281,7 @@ impl Generic {
 
             let result = result.to_xdr_base64(Limits::none()).unwrap();
 
-            Ok(ExecutionResult { cpu, mem, result, events })
+            Ok((cpu, mem, result, events ))
         } else {
             return Err(JsonResponse::new("Failed to execute contract", 400)
                 .with_opt(execution_result.err().unwrap().to_string())

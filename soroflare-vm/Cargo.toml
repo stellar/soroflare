@@ -4,18 +4,17 @@ version.workspace = true
 edition = "2021"
 publish = false
 
-
 [dependencies.soroban-env-host]
-path = "../../rs-soroban-env/soroban-env-host"
+version = "20.2.0"
 
 [dependencies.soroban-spec]
-path = "../../rs-soroban-sdk/soroban-spec"
+version = "20.2.0"
 
 [dependencies.soroban-ledger-snapshot]
-path = "../../rs-soroban-sdk/soroban-ledger-snapshot"
+version = "20.2.0"
 
 [dependencies.soroban-spec-tools]
-path = "../../soroban-tools/cmd/crates/soroban-spec-tools"
+version = "20.2.0"
 
 [dependencies]
 base64 = "0.21.2"
