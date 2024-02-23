@@ -131,7 +131,7 @@ impl super::Task for Asteroids {
             );
         }
         
-        let InvocationResult { result, storage, budget, events } = solution_solve_result.unwrap();
+        let InvocationResult { result, storage, budget, events, .. } = solution_solve_result.unwrap();
         //let (user_solve_result, (_, user_solve_budget, _)) = solution_solve_result.unwrap();
 
         let points_req = soroban_vm::invoke(&engine_id, "p_points", &vec![], &mut state).unwrap();

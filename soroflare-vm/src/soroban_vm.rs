@@ -9,13 +9,9 @@ use std::rc::Rc;
 
 use hex::FromHexError;
 use soroban_env_host::{
-    budget::Budget,
-    events::Events,
-    storage::Storage,
-    xdr::{
+    auth::RecordedAuthPayload, budget::Budget, events::Events, storage::Storage, xdr::{
         AccountId, ContractEvent, Error as XdrError, Hash, HostFunction, InvokeContractArgs, LedgerKey, LedgerKeyAccount, PublicKey, ScAddress, ScSpecEntry, ScSymbol, ScVal, ScVec, StringM, Uint256
-    },
-    Host, HostError,
+    }, Host, HostError
 };
 use soroban_spec_tools::Spec;
 
@@ -114,6 +110,11 @@ pub fn invoke_with_budget(
 
     let (spec, host_function_params) =
         build_host_function_parameters(*contract_id, spec_entries, fn_name, args)?;
+    
+    h.enable_debug().unwrap();
+
+    // Currently, we rely solely on recording auths.
+    h.switch_to_recording_auth(true).unwrap();
 
     let res = h
         .invoke_function(HostFunction::InvokeContract(host_function_params))
@@ -129,7 +130,7 @@ pub fn invoke_with_budget(
                     host_error.into()
                 }
             } else {
-                console_log!("{:?}", host_error);
+                console_log!("spec external {:?}", host_error);
                 
                 host_error.into()
             }
@@ -141,6 +142,7 @@ pub fn invoke_with_budget(
     // currently we don't need to deal with auth.
 
     let budget = h.budget_cloned();
+    let auth_payloads = h.get_recorded_auth_payloads()?;
     let (storage, events) = h.try_finish()?;
 
     let events = events.0.iter().map(|e| {
@@ -153,7 +155,8 @@ pub fn invoke_with_budget(
             result: res,
             storage,
             budget,
-            events
+            events,
+            auth_payloads
         }
     )
 }
@@ -223,5 +226,6 @@ pub struct InvocationResult {
     pub result: ScVal,
     pub storage: Storage,
     pub budget: Budget,
-    pub events: Vec<ContractEvent>
+    pub events: Vec<ContractEvent>,
+    pub auth_payloads: Vec<RecordedAuthPayload>
 }

@@ -8,8 +8,8 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use soroban_env_host::{
-    budget::Budget, events::Events, xdr::{
-        BytesM, ContractCodeEntry, ContractDataDurability, ContractDataEntry, ContractEvent, ContractExecutable, ExtensionPoint, Hash, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey, LedgerKeyContractCode, LedgerKeyContractData, Limits, ReadXdr, ScAddress, ScContractInstance, ScSymbol, ScVal, ScVec, VecM, WriteXdr, SorobanTransactionData, SorobanResources, LedgerFootprint
+    auth::RecordedAuthPayload, budget::Budget, events::Events, xdr::{
+        BytesM, ContractCodeEntry, ContractDataDurability, ContractDataEntry, ContractEvent, ContractExecutable, ExtensionPoint, Hash, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerFootprint, LedgerKey, LedgerKeyContractCode, LedgerKeyContractData, Limits, ReadXdr, ScAddress, ScContractInstance, ScSymbol, ScVal, ScVec, SorobanAddressCredentials, SorobanAuthorizationEntry, SorobanCredentials, SorobanResources, SorobanTransactionData, VecM, WriteXdr
     }
 };
 use soroflare_vm::{
@@ -57,6 +57,36 @@ pub struct WithSnapshotInput {
     params: Vec<ScVal>,
     network: Option<String>
 }
+
+
+// adapted from preflight
+fn recorded_auth_payload_to_xdr(
+    payload: &RecordedAuthPayload,
+) -> String {
+    let result = match (payload.address.clone(), payload.nonce) {
+        (Some(address), Some(nonce)) => SorobanAuthorizationEntry {
+            credentials: SorobanCredentials::Address(SorobanAddressCredentials {
+                address,
+                nonce,
+                // signature is left empty. This is where the client will put their signatures when
+                // submitting the transaction.
+                signature_expiration_ledger: 0,
+                signature: ScVal::Void,
+            }),
+            root_invocation: payload.invocation.clone(),
+        },
+        (None, None) => SorobanAuthorizationEntry {
+            credentials: SorobanCredentials::SourceAccount,
+            root_invocation: payload.invocation.clone(),
+        },
+        // the address and the nonce can't be present independently
+        (a,n) =>
+            panic!("recorded_auth_payload_to_xdr: address and nonce present independently (address: {:?}, nonce: {:?})", a, n),
+    };
+    
+    result.to_xdr_base64(Limits::none()).unwrap()
+}
+
 
 pub struct Generic;
 
@@ -202,7 +232,7 @@ impl Generic {
 
         match execution_result {
             Ok(res) => {
-                let InvocationResult { result, budget, events, .. } = res;
+                let InvocationResult { result, budget, events, auth_payloads, .. } = res;
                 
                 let cpu = budget.get_cpu_insns_consumed().unwrap();
                 let mem = budget.get_mem_bytes_consumed().unwrap();
@@ -217,7 +247,7 @@ impl Generic {
                 
                 api_result.results = Some(Results {
                     xdr: result,
-                    auth: vec![]
+                    auth: auth_payloads.iter().map(recorded_auth_payload_to_xdr).collect()
                 });
 
                 Ok(api_result)
@@ -277,7 +307,7 @@ impl Generic {
         );
 
         if let Ok(res) = execution_result {
-            let InvocationResult { result, storage, budget, events } = res;
+            let InvocationResult { result, storage, budget, events , ..} = res;
             
             let cpu = budget.get_cpu_insns_consumed().unwrap();
             let mem = budget.get_mem_bytes_consumed().unwrap();
@@ -381,7 +411,7 @@ pub async fn handle_snapshot(
 }
 
 mod test {
-    use soroban_env_host::xdr::{LedgerKeyAccount, AccountId, PublicKey, Uint256, AccountEntry, String32, SequenceNumber, Thresholds, AccountEntryExt};
+    use soroban_env_host::xdr::{AccountEntry, AccountEntryExt, AccountId, Int128Parts, LedgerKeyAccount, PublicKey, ScBytes, ScMap, ScMapEntry, ScString, SequenceNumber, String32, Thresholds, Uint256};
 
     use super::*;
     #[test]
@@ -389,7 +419,7 @@ mod test {
         let symbol = ScVal::Symbol(ScSymbol("tdep".to_string().try_into().unwrap()));
 
         let binary = hex::decode("0061736d01000000010f0360027e7e017e60017e017e60000002070101760167000003030201020405017001010105030100100619037f01418080c0000b7f00418080c0000b7f00418080c0000b073105066d656d6f727902000568656c6c6f0001015f00020a5f5f646174615f656e6403010b5f5f686561705f6261736503020ac80102c20101027f23808080800041206b2201248080808000024002402000a741ff01712202410e460d00200241ca00470d010b200120003703082001428ee8f1d8ba02370300410021020340024020024110470d00410021020240034020024110460d01200141106a20026a200120026a290300370300200241086a21020c000b0b200141106aad4220864204844284808080201080808080002100200141206a24808080800020000f0b200141106a20026a4202370300200241086a21020c000b0b00000b02000b00430e636f6e747261637473706563763000000000000000000000000568656c6c6f000000000000010000000000000002746f00000000001100000001000003ea00000011001e11636f6e7472616374656e766d657461763000000000000000140000000000770e636f6e74726163746d6574617630000000000000000572737665720000000000000e312e37362e302d6e696768746c7900000000000000000008727373646b7665720000002f32302e302e30233832326365366363336534363163636339323532373562343732643737623663613335623263643900").unwrap();
-        println!("{:?}", binary);
+        
         let hash = Hash(Sha256::digest([0; 32].as_slice()).into());
         let code_key = LedgerKey::ContractCode(LedgerKeyContractCode { hash: hash.clone() });
         let code_entry = LedgerEntry {
@@ -491,75 +521,204 @@ mod test {
         println!("{}", serde_json::json!(snapshot));
     }
 
-    #[test]
-    fn generate_transfer_request_no_code() {
-        let symbol = ScVal::Symbol(ScSymbol("tdep".to_string().try_into().unwrap()));
+    mod sac_snapshot_and_request {
+        use super::*;
 
-        let account_id = AccountId(PublicKey::PublicKeyTypeEd25519(Uint256([0; 32])));
-        let account_key = LedgerKey::Account(LedgerKeyAccount {
-            account_id: account_id.clone()
-        });
-        let account_entry = LedgerEntry {
-            last_modified_ledger_seq: 0,
-            data: LedgerEntryData::Account(AccountEntry {
-                account_id: account_id.clone(),
-                balance: 0,
-                flags: 0,
-                home_domain: String32::default(),
-                inflation_dest: None,
-                num_sub_entries: 1,
-                seq_num: SequenceNumber(0),
-                thresholds: Thresholds([1; 4]),
-                signers: VecM::default(),
-                ext: AccountEntryExt::V0,
-            }),
-            ext: LedgerEntryExt::V0
-        };
-        
-        let contract_key = LedgerKey::ContractData(LedgerKeyContractData {
-            contract: ScAddress::Contract(stellar_strkey::Contract::from_string("CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC").unwrap().0.into()),
-            key: ScVal::LedgerKeyContractInstance,
-            durability: ContractDataDurability::Persistent,
-        });
+        // NOTE: currently the source account is inferred within the vm wrapper itself and already has
+        // a xlm balance of 10000 XLM strooops by default.
+        #[test]
+        fn transfer() {
+            let source_account = AccountId(PublicKey::PublicKeyTypeEd25519(Uint256(
+                stellar_strkey::ed25519::PublicKey::from_string(
+                    "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+                )
+                .unwrap()
+                .0,
+            )));
 
-        let contract_entry = LedgerEntry {
-            last_modified_ledger_seq: 0,
-            data: LedgerEntryData::ContractData(ContractDataEntry {
-                contract: ScAddress::Contract([0; 32].into()),
+            let account_id = AccountId(PublicKey::PublicKeyTypeEd25519(Uint256(stellar_strkey::ed25519::PublicKey::from_string("GDEOJOBOGUWAZHNXLTD7BIUXHVR4A4LPIMWQTC6Z4MTG6VNL7BIFUP7M").unwrap().0)));
+            let account_key = LedgerKey::Account(LedgerKeyAccount {
+                account_id: account_id.clone()
+            });
+            let account_entry = LedgerEntry {
+                last_modified_ledger_seq: 0,
+                data: LedgerEntryData::Account(AccountEntry {
+                    account_id: account_id.clone(),
+                    balance: 0,
+                    flags: 0,
+                    home_domain: String32::default(),
+                    inflation_dest: None,
+                    num_sub_entries: 1,
+                    seq_num: SequenceNumber(0),
+                    thresholds: Thresholds([1; 4]),
+                    signers: VecM::default(),
+                    ext: AccountEntryExt::V0,
+                }),
+                ext: LedgerEntryExt::V0
+            };
+            
+            let contract_key = LedgerKey::ContractData(LedgerKeyContractData {
+                contract: ScAddress::Contract(stellar_strkey::Contract::from_string("CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC").unwrap().0.into()),
                 key: ScVal::LedgerKeyContractInstance,
                 durability: ContractDataDurability::Persistent,
-                val: ScVal::ContractInstance(ScContractInstance {
-                    executable: ContractExecutable::StellarAsset,
-                    storage: None,
+            });
+
+            let contract_entry = LedgerEntry {
+                last_modified_ledger_seq: 0,
+                data: LedgerEntryData::ContractData(ContractDataEntry {
+                    contract: ScAddress::Contract(stellar_strkey::Contract::from_string("CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC").unwrap().0.into()),
+                    key: ScVal::LedgerKeyContractInstance,
+                    durability: ContractDataDurability::Persistent,
+                    val: ScVal::ContractInstance(ScContractInstance {
+                        executable: ContractExecutable::StellarAsset,
+                        storage: Some(ScMap(vec![
+                            ScMapEntry {
+                                key: ScVal::Symbol(ScSymbol("METADATA".try_into().unwrap())),
+                                val: ScVal::Map(Some(ScMap(vec![
+                                    ScMapEntry {
+                                        key: ScVal::Symbol(ScSymbol("decimal".try_into().unwrap())),
+                                        val: ScVal::U32(7)
+                                    },
+                                    ScMapEntry {
+                                        key: ScVal::Symbol(ScSymbol("name".try_into().unwrap())),
+                                        val: ScVal::String(ScString("native".try_into().unwrap()))
+                                    },
+                                    ScMapEntry {
+                                        key: ScVal::Symbol(ScSymbol("symbol".try_into().unwrap())),
+                                        val: ScVal::String(ScString("native".try_into().unwrap()))
+                                    },
+                                ].try_into().unwrap())))
+                            },
+                            ScMapEntry {
+                                key: ScVal::Vec(Some(ScVec(vec![ScVal::Symbol(ScSymbol("Admin".try_into().unwrap()))].try_into().unwrap()))),
+                                val: ScVal::Address(ScAddress::Account(source_account.clone()))
+                            },
+                            ScMapEntry {
+                                key: ScVal::Vec(Some(ScVec(vec![ScVal::Symbol(ScSymbol("AssetInfo".try_into().unwrap()))].try_into().unwrap()))),
+                                val: ScVal::Vec(Some(ScVec(vec![ScVal::Symbol(ScSymbol("Native".try_into().unwrap()))].try_into().unwrap()))),
+                            },
+                        ].try_into().unwrap())),
+                    }),
+                    ext: ExtensionPoint::V0,
                 }),
-                ext: ExtensionPoint::V0,
-            }),
-            ext: LedgerEntryExt::V0,
-        };
+                ext: LedgerEntryExt::V0,
+            };
 
-        let source_account = AccountId(PublicKey::PublicKeyTypeEd25519(Uint256(
-            stellar_strkey::ed25519::PublicKey::from_string(
-                "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABEAR",
-            )
-            .unwrap()
-            .0,
-        )));
+            let snapshot = WithSnapshotInput {
+                network: Some("Test SDF Network ; September 2015".into()),            
+                ledger_sequence: 50,
+                keys: vec![contract_key, account_key],
+                vals: vec![EntryWithLifetime {
+                    entry: contract_entry,
+                    live_until: Some(100),
+                }, EntryWithLifetime {
+                    entry: account_entry,
+                    live_until: Some(100),
+                }],
+                contract_id: stellar_strkey::Contract::from_string("CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC").unwrap().0,
+                fname: String::from("transfer"),
+                params: vec![ScVal::Address(ScAddress::Account(source_account)), ScVal::Address(ScAddress::Account(account_id)), ScVal::I128(Int128Parts {
+                    hi: 0,
+                    lo: 1000
+                })],
+            };
+            println!("{}", serde_json::json!(snapshot));
+        }
 
-        let snapshot = WithSnapshotInput {
-            network: Some("Test SDF Network ; September 2015".into()),            
-            ledger_sequence: 50,
-            keys: vec![contract_key, account_key],
-            vals: vec![EntryWithLifetime {
-                entry: contract_entry,
-                live_until: Some(100),
-            }, EntryWithLifetime {
-                entry: account_entry,
-                live_until: Some(100),
-            }],
-            contract_id: stellar_strkey::Contract::from_string("CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC").unwrap().0,
-            fname: String::from("transfer"),
-            params: vec![ScVal::Address(ScAddress::Account(source_account)), ScVal::Address(ScAddress::Account(account_id))],
-        };
-        println!("{}", serde_json::json!(snapshot));
+        #[test]
+        fn admin() {
+            let source_account = AccountId(PublicKey::PublicKeyTypeEd25519(Uint256(
+                stellar_strkey::ed25519::PublicKey::from_string(
+                    "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+                )
+                .unwrap()
+                .0,
+            )));
+
+            let account_id = AccountId(PublicKey::PublicKeyTypeEd25519(Uint256(stellar_strkey::ed25519::PublicKey::from_string("GDEOJOBOGUWAZHNXLTD7BIUXHVR4A4LPIMWQTC6Z4MTG6VNL7BIFUP7M").unwrap().0)));
+            let account_key = LedgerKey::Account(LedgerKeyAccount {
+                account_id: account_id.clone()
+            });
+            let account_entry = LedgerEntry {
+                last_modified_ledger_seq: 0,
+                data: LedgerEntryData::Account(AccountEntry {
+                    account_id: account_id.clone(),
+                    balance: 0,
+                    flags: 0,
+                    home_domain: String32::default(),
+                    inflation_dest: None,
+                    num_sub_entries: 1,
+                    seq_num: SequenceNumber(0),
+                    thresholds: Thresholds([1; 4]),
+                    signers: VecM::default(),
+                    ext: AccountEntryExt::V0,
+                }),
+                ext: LedgerEntryExt::V0
+            };
+            
+            let contract_key = LedgerKey::ContractData(LedgerKeyContractData {
+                contract: ScAddress::Contract(stellar_strkey::Contract::from_string("CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC").unwrap().0.into()),
+                key: ScVal::LedgerKeyContractInstance,
+                durability: ContractDataDurability::Persistent,
+            });
+
+            let contract_entry = LedgerEntry {
+                last_modified_ledger_seq: 0,
+                data: LedgerEntryData::ContractData(ContractDataEntry {
+                    contract: ScAddress::Contract(stellar_strkey::Contract::from_string("CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC").unwrap().0.into()),
+                    key: ScVal::LedgerKeyContractInstance,
+                    durability: ContractDataDurability::Persistent,
+                    val: ScVal::ContractInstance(ScContractInstance {
+                        executable: ContractExecutable::StellarAsset,
+                        storage: Some(ScMap(vec![
+                            ScMapEntry {
+                                key: ScVal::Symbol(ScSymbol("METADATA".try_into().unwrap())),
+                                val: ScVal::Map(Some(ScMap(vec![
+                                    ScMapEntry {
+                                        key: ScVal::Symbol(ScSymbol("decimal".try_into().unwrap())),
+                                        val: ScVal::U32(7)
+                                    },
+                                    ScMapEntry {
+                                        key: ScVal::Symbol(ScSymbol("name".try_into().unwrap())),
+                                        val: ScVal::String(ScString("native".try_into().unwrap()))
+                                    },
+                                    ScMapEntry {
+                                        key: ScVal::Symbol(ScSymbol("symbol".try_into().unwrap())),
+                                        val: ScVal::String(ScString("native".try_into().unwrap()))
+                                    },
+                                ].try_into().unwrap())))
+                            },
+                            ScMapEntry {
+                                key: ScVal::Vec(Some(ScVec(vec![ScVal::Symbol(ScSymbol("Admin".try_into().unwrap()))].try_into().unwrap()))),
+                                val: ScVal::Address(ScAddress::Account(source_account.clone()))
+                            },
+                            ScMapEntry {
+                                key: ScVal::Vec(Some(ScVec(vec![ScVal::Symbol(ScSymbol("AssetInfo".try_into().unwrap()))].try_into().unwrap()))),
+                                val: ScVal::Vec(Some(ScVec(vec![ScVal::Symbol(ScSymbol("Native".try_into().unwrap()))].try_into().unwrap()))),
+                            },
+                        ].try_into().unwrap())),
+                    }),
+                    ext: ExtensionPoint::V0,
+                }),
+                ext: LedgerEntryExt::V0,
+            };
+
+            let snapshot = WithSnapshotInput {
+                network: Some("Test SDF Network ; September 2015".into()),            
+                ledger_sequence: 50,
+                keys: vec![contract_key, account_key],
+                vals: vec![EntryWithLifetime {
+                    entry: contract_entry,
+                    live_until: Some(100),
+                }, EntryWithLifetime {
+                    entry: account_entry,
+                    live_until: Some(100),
+                }],
+                contract_id: stellar_strkey::Contract::from_string("CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC").unwrap().0,
+                fname: String::from("admin"),
+                params: vec![],
+            };
+            println!("{}", serde_json::json!(snapshot));
+        }
     }
 }
