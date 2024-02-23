@@ -20,6 +20,7 @@ use soroban_env_host::{
 use soroban_spec_tools::Spec;
 
 use soroban_spec::read::FromWasmError;
+use worker::console_log;
 // use worker::console_log;
 
 use crate::soroban_cli::{self};
@@ -112,17 +113,24 @@ pub fn invoke_with_budget(
     h.set_ledger_info(ledger_info.clone())?;
 
     let (spec, host_function_params) =
-        build_host_function_parameters(*contract_id, &spec_entries, fn_name, args)?;
+        build_host_function_parameters(*contract_id, spec_entries, fn_name, args)?;
 
     let res = h
         .invoke_function(HostFunction::InvokeContract(host_function_params))
         .map_err(|host_error| {
-            if let Ok(error) = spec.find_error_type(host_error.error.get_code()) {
-                Error::ContractInvoke(
-                    error.name.to_utf8_string_lossy(),
-                    error.doc.to_utf8_string_lossy(),
-                )
+            if let Some(spec) = spec {            
+                if let Ok(error) = spec.find_error_type(host_error.error.get_code()) {
+                    Error::ContractInvoke(
+                        error.name.to_utf8_string_lossy(),
+                        error.doc.to_utf8_string_lossy(),
+                    )
+                } else {
+                    console_log!("{:?}", host_error);
+                    host_error.into()
+                }
             } else {
+                console_log!("{:?}", host_error);
+                
                 host_error.into()
             }
         })?;
@@ -154,11 +162,15 @@ pub fn invoke_with_budget(
 // applied for the new InvokeContractArgs type.
 fn build_host_function_parameters(
     contract_id: [u8; 32],
-    spec_entries: &[ScSpecEntry],
+    spec_entries: Option<Vec<ScSpecEntry>>,
     fn_name: &str,
     parsed_args: &Vec<ScVal>,
-) -> Result<(Spec, InvokeContractArgs), Error> {
-    let spec = Spec(Some(spec_entries.to_vec()));
+) -> Result<(Option<Spec>, InvokeContractArgs), Error> {
+    let spec = if let Some(spec_entries) = spec_entries {
+        Some(Spec(Some(spec_entries)))
+    } else {
+        None
+    };
 
     // Add the contract ID and the function name to the arguments
     let mut complete_args = vec![];

@@ -2,7 +2,7 @@ use serde_derive::{Deserialize, Serialize};
 use soroban_env_host::xdr::{LedgerEntry, LedgerKey};
 use soroban_ledger_snapshot::LedgerSnapshot;
 
-use crate::soroban_cli::network::sandbox_network_id;
+use crate::soroban_cli::network::{sandbox_network_id, SANDBOX_NETWORK_PASSPHRASE, hashed_network_id};
 
 pub fn empty_ledger_snapshot() -> LedgerSnapshot {
     LedgerSnapshot {
@@ -31,7 +31,9 @@ pub fn ledger_snapshot_from_entries_and_ledger(
     ledger_sequence: u32,
     keys: Vec<LedgerKey>,
     vals: Vec<EntryWithLifetime>,
+    network: Option<&str>,
 ) -> Result<LedgerSnapshot, crate::soroban_vm::Error> {
+    let network_id = network.unwrap_or(SANDBOX_NETWORK_PASSPHRASE);
     let mut ledger_entries = Vec::new();
 
     for (idx, key) in keys.iter().enumerate() {
@@ -46,7 +48,7 @@ pub fn ledger_snapshot_from_entries_and_ledger(
     }
 
     Ok(LedgerSnapshot {
-        network_id: sandbox_network_id(),
+        network_id: hashed_network_id(network_id),
         sequence_number: ledger_sequence,
         ledger_entries,
         ..Default::default()

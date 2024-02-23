@@ -6,6 +6,7 @@ publish = false
 
 [dependencies.soroban-env-host]
 version = "20.2.0"
+features = ["testutils"]
 
 [dependencies.soroban-spec]
 version = "20.2.0"

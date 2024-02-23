@@ -219,7 +219,7 @@ fn get_entry_from_snapshot(
 pub fn get_contract_spec_from_state(
     state: &LedgerSnapshot,
     contract_id: [u8; 32],
-) -> Result<Vec<ScSpecEntry>, FromWasmError> {
+) -> Result<Option<Vec<ScSpecEntry>>, FromWasmError> {
     // Note:
     // We're not dealing with state expiration since it makes no sense
     // to do so in an execution that always spins up a brand-new ledger.
@@ -242,7 +242,8 @@ pub fn get_contract_spec_from_state(
             ..
         } => match executable {
             ContractExecutable::StellarAsset => {
-                panic!("soroflare can't handle direct SACs invocations") // NB: this code is actually never going to be executed since
+                Ok(None)
+                // panic!("soroflare can't handle direct SACs invocations") // NB: this code is actually never going to be executed since
                                                                          // it would require the user to have loaded a SAC which is not possible.
             }
             ContractExecutable::Wasm(hash) => {
@@ -260,7 +261,7 @@ pub fn get_contract_spec_from_state(
                     LedgerEntry {
                         data: LedgerEntryData::ContractCode(ContractCodeEntry { code, .. }),
                         ..
-                    } => soroban_spec::read::from_wasm(code.as_vec()),
+                    } => soroban_spec::read::from_wasm(code.as_vec()).map(|res| Some(res)),
                     _ => Err(FromWasmError::NotFound),
                 }
             }
@@ -317,11 +318,11 @@ pub fn default_account_ledger_entry(account_id: AccountId) -> LedgerEntry {
     LedgerEntry {
         data: LedgerEntryData::Account(AccountEntry {
             account_id,
-            balance: 0,
+            balance: 100000000000, // todo, don't infer balances, should be provided as entries
             flags: 0,
             home_domain: String32::default(),
             inflation_dest: None,
-            num_sub_entries: 0,
+            num_sub_entries: 1,
             seq_num: SequenceNumber(0),
             thresholds: Thresholds([1; 4]),
             signers: VecM::default(),
