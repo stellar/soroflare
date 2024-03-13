@@ -12,8 +12,15 @@ crate-type = ["cdylib", "rlib"]
 default = ["console_error_panic_hook"]
 
 [dependencies.soroban-env-host]
-version = "20.2.0"
-features = ["testutils"]
+git = "https://github.com/heytdep/rs-soroban-env/"
+rev = "917fa35e7a6b0b8c60aeb4ebc995793c38fcd04e"
+#path = "/mnt/storagehdd/sdf-work/rs-soroban-env/soroban-env-host"
+features = ["testutils", "recording_mode", "unstable-next-api"]
+
+[dependencies.soroban-simulation]
+git = "https://github.com/heytdep/rs-soroban-env/"
+rev = "917fa35e7a6b0b8c60aeb4ebc995793c38fcd04e"
+#path = "/mnt/storagehdd/sdf-work/rs-soroban-env/soroban-simulation"
 
 [dependencies]
 cfg-if = "0.1.2"

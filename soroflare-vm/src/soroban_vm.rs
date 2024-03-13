@@ -9,9 +9,22 @@ use std::rc::Rc;
 
 use hex::FromHexError;
 use soroban_env_host::{
-    auth::RecordedAuthPayload, budget::Budget, events::Events, storage::Storage, xdr::{
-        AccountId, ContractEvent, Error as XdrError, Hash, HostFunction, InvokeContractArgs, LedgerKey, LedgerKeyAccount, PublicKey, ScAddress, ScSpecEntry, ScSymbol, ScVal, ScVec, StringM, Uint256
-    }, Host, HostError
+    auth::RecordedAuthPayload,
+    budget::Budget,
+    events::Events,
+    ledger_info,
+    storage::Storage,
+    xdr::{
+        AccountId, ContractEvent, DiagnosticEvent, Error as XdrError, ExtensionPoint, Hash,
+        HostFunction, InvokeContractArgs, InvokeHostFunctionOp, LedgerKey, LedgerKeyAccount,
+        OperationBody, PublicKey, ScAddress, ScSpecEntry, ScSymbol, ScVal, ScVec,
+        SorobanTransactionData, StringM, Uint256,
+    },
+    Host, HostError,
+};
+use soroban_simulation::{
+    simulation::{SimulationAdjustmentConfig, SimulationAdjustmentFactor},
+    NetworkConfig, SnapshotSourceWithArchive,
 };
 use soroban_spec_tools::Spec;
 
@@ -19,11 +32,11 @@ use soroban_spec::read::FromWasmError;
 use worker::console_log;
 // use worker::console_log;
 
-use crate::soroban_cli::{self};
+use crate::{soroban_cli, soroflare_utils};
 
 pub fn deploy(
     src: &[u8],
-    state: &mut soroban_ledger_snapshot::LedgerSnapshot,
+    state: &mut soroflare_utils::LedgerSnapshot,
     contract_id: &[u8; 32],
 ) -> Result<(), Error> {
     let wasm_hash = soroban_cli::utils::add_contract_code_to_ledger_entries(
@@ -48,16 +61,28 @@ pub fn invoke(
     contract_id: &[u8; 32],
     fn_name: &str,
     args: &Vec<ScVal>,
-    state: &mut soroban_ledger_snapshot::LedgerSnapshot,
+    state: &mut soroflare_utils::LedgerSnapshot,
+    adjustment_config: SimulationAdjustmentConfig,
+    network_config: NetworkConfig,
 ) -> Result<InvocationResult, Error> {
-    invoke_with_budget(contract_id, fn_name, args, state, None)
+    invoke_with_budget(
+        contract_id,
+        fn_name,
+        args,
+        state,
+        adjustment_config,
+        network_config,
+        None,
+    )
 }
 
 pub fn invoke_with_budget(
     contract_id: &[u8; 32],
     fn_name: &str,
     args: &Vec<ScVal>,
-    state: &mut soroban_ledger_snapshot::LedgerSnapshot,
+    state: &mut soroflare_utils::LedgerSnapshot,
+    adjustment_config: SimulationAdjustmentConfig,
+    network_config: NetworkConfig,
     budget: Option<Budget>,
 ) -> Result<InvocationResult, Error> {
     let budget = budget.unwrap_or_default();
@@ -93,51 +118,99 @@ pub fn invoke_with_budget(
     }
 
     let snap = Rc::new(state.clone());
-    let storage = Storage::with_recording_footprint(snap);
+    //let storage = Storage::with_recording_footprint(snap);
 
     let spec_entries = soroban_cli::utils::get_contract_spec_from_state(&state, *contract_id)
         .map_err(Error::CannotParseContractSpec)?;
 
-    let h = Host::with_storage_and_budget(storage, budget);
+    /*
+        let h = Host::with_storage_and_budget(storage, budget);
 
-    h.set_source_account(source_account)?;
-    h.set_base_prng_seed(rand::Rng::gen(&mut rand::thread_rng()))?;
+        h.set_source_account(source_account)?;
+        h.set_base_prng_seed(rand::Rng::gen(&mut rand::thread_rng()))?;
 
-    let mut ledger_info = state.ledger_info();
-    ledger_info.sequence_number += 1;
-    ledger_info.timestamp += 5;
-    h.set_ledger_info(ledger_info.clone())?;
+        //let mut ledger_info = state.ledger_info();
+        ledger_info.sequence_number += 1;
+        ledger_info.timestamp += 5;
+        h.set_ledger_info(ledger_info.clone())?;
+
+
+        h.enable_debug().unwrap();
+
+        // Currently, we rely solely on recording auths.
+        h.switch_to_recording_auth(true).unwrap();
+    */
 
     let (spec, host_function_params) =
         build_host_function_parameters(*contract_id, spec_entries, fn_name, args)?;
-    
-    h.enable_debug().unwrap();
+    let host_fn = HostFunction::InvokeContract(host_function_params);
 
-    // Currently, we rely solely on recording auths.
-    h.switch_to_recording_auth(true).unwrap();
-
-    let res = h
-        .invoke_function(HostFunction::InvokeContract(host_function_params))
-        .map_err(|host_error| {
-            if let Some(spec) = spec {            
-                if let Ok(error) = spec.find_error_type(host_error.error.get_code()) {
-                    Error::ContractInvoke(
-                        error.name.to_utf8_string_lossy(),
-                        error.doc.to_utf8_string_lossy(),
-                    )
-                } else {
-                    console_log!("{:?}", host_error);
-                    host_error.into()
-                }
+    let mut diagnostic_events: Vec<DiagnosticEvent> = vec![];
+    let res = soroban_env_host::e2e_invoke::invoke_host_function_in_recording_mode(
+        &budget,
+        true,
+        &host_fn,
+        &source_account,
+        None,
+        state.ledger_info(),
+        Rc::new(state.clone()),
+        [0; 32], // customizable
+        &mut diagnostic_events,
+    )
+    .map_err(|host_error| {
+        if let Some(spec) = spec {
+            if let Ok(error) = spec.find_error_type(host_error.error.get_code()) {
+                Error::ContractInvoke(
+                    error.name.to_utf8_string_lossy(),
+                    error.doc.to_utf8_string_lossy(),
+                )
             } else {
-                console_log!("spec external {:?}", host_error);
-                
+                console_log!("{:?}", host_error);
                 host_error.into()
             }
-        })?;
+        } else {
+            console_log!("spec external {:?}", host_error);
 
-    state.update(&h);
-    
+            host_error.into()
+        }
+    })?;
+
+    let (mut resources, rent_changes) =
+        soroban_simulation::resources::simulate_invoke_host_function_op_resources(
+            &res.ledger_changes,
+            budget.get_cpu_insns_consumed().unwrap().try_into().unwrap(), // todo: enforce safety
+        )
+        .unwrap();
+
+    let operation = OperationBody::InvokeHostFunction(InvokeHostFunctionOp {
+        host_function: host_fn,
+        auth: res.auth.clone().try_into().unwrap(),
+    });
+    let transaction_resources =
+        soroban_simulation::resources::compute_adjusted_transaction_resources(
+            operation,
+            &mut resources,
+            &adjustment_config,
+            res.contract_events_and_return_value_size,
+        )
+        .unwrap();
+    let resource_fee = soroban_simulation::resources::compute_resource_fee(
+        &network_config,
+        &state.ledger_info(),
+        &transaction_resources,
+        &rent_changes,
+        &adjustment_config,
+    );
+
+    let transaction_data = SorobanTransactionData {
+        resources,
+        resource_fee,
+        ext: ExtensionPoint::V0,
+    };
+
+    Ok(InvocationResult::default())
+    /*state.update(&h);
+
     // Note:
     // currently we don't need to deal with auth.
 
@@ -158,12 +231,12 @@ pub fn invoke_with_budget(
             events,
             auth_payloads
         }
-    )
+    )*/
 }
 
 // a modified version of https://github.com/stellar/soroban-tools/blob/v0.8.0/cmd/soroban-cli/src/commands/contract/invoke.rs#L211-L233
 // applied for the new InvokeContractArgs type.
-fn build_host_function_parameters(
+pub fn build_host_function_parameters(
     contract_id: [u8; 32],
     spec_entries: Option<Vec<ScSpecEntry>>,
     fn_name: &str,
@@ -224,8 +297,17 @@ pub enum Error {
 
 pub struct InvocationResult {
     pub result: ScVal,
-    pub storage: Storage,
+    //pub storage: Storage,
     pub budget: Budget,
     pub events: Vec<ContractEvent>,
-    pub auth_payloads: Vec<RecordedAuthPayload>
+    pub auth_payloads: Vec<RecordedAuthPayload>,
+}
+
+impl Default for InvocationResult {
+    fn default() -> Self {
+        InvocationResult {
+            result: ScVal::Void,
+            ..Default::default()
+        }
+    }
 }

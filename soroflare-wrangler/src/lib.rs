@@ -1,15 +1,9 @@
-use tasks::TaskRegistry;
 use worker::{console_log, event, Cors, Date, Env, Method, Request, Response, Result, Router};
 
 mod embedded;
 mod response;
 mod routes;
-mod tasks;
 mod utils;
-
-pub fn setup(reg: &mut TaskRegistry) {
-    tasks::setup(reg);
-}
 
 fn log_request(req: &Request) {
     console_log!(
@@ -21,6 +15,8 @@ fn log_request(req: &Request) {
     );
 }
 
+pub struct State {}
+
 #[event(fetch, respond_with_errors)]
 pub async fn main(req: Request, env: Env, ctx: worker::Context) -> Result<Response> {
     // Optionally, get more helpful error messages written to the console in the case of a panic.
@@ -28,21 +24,12 @@ pub async fn main(req: Request, env: Env, ctx: worker::Context) -> Result<Respon
 
     log_request(&req);
 
-    let mut task_reg = TaskRegistry::default();
-    tasks::setup(&mut task_reg);
-
-    task_reg.debug = true;
-
-    let mut router = Router::with_data(task_reg.clone());
+    let mut router = Router::with_data(State {});
     router = router
-        .options("/submit", |_req, _ctx| Response::empty())
-        .post_async("/submit", routes::submit::handle)
-        .options("/execute", |_req, _ctx| Response::empty())
-        .post_async("/execute", routes::generic::handle)
         .options("/uploadwasm", |_req, _ctx| Response::empty())
-        .post_async("/uploadwasm", routes::generic::handle_upload)
+        .post_async("/uploadwasm", routes::snapshot::handle_upload)
         .options("/executesnapshot", |_req, _ctx| Response::empty())
-        .post_async("/executesnapshot", routes::generic::handle_snapshot);
+        .post_async("/executesnapshot", routes::snapshot::handle_snapshot);
 
     let cors = Cors::new()
         .with_allowed_headers(["*"])

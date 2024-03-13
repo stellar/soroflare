@@ -21,7 +21,7 @@ use soroban_env_host::{
 };
 //use soroban_sdk::token;
 
-use soroban_ledger_snapshot::LedgerSnapshot;
+use crate::soroflare_utils::LedgerSnapshot;
 use soroban_spec::read::FromWasmError;
 use stellar_strkey::ed25519::PrivateKey;
 
@@ -32,31 +32,6 @@ use super::network::sandbox_network_id;
 /// Might return an error
 pub fn contract_hash(contract: &[u8]) -> Result<Hash, XdrError> {
     Ok(Hash(Sha256::digest(contract).into()))
-}
-
-/// # Errors
-///
-/// Might return an error
-pub fn ledger_snapshot_read_or_default(
-    p: impl AsRef<Path>,
-) -> Result<LedgerSnapshot, soroban_ledger_snapshot::Error> {
-    match LedgerSnapshot::read_file(p) {
-        Ok(snapshot) => Ok(snapshot),
-        Err(soroban_ledger_snapshot::Error::Io(e)) if e.kind() == ErrorKind::NotFound => {
-            Ok(LedgerSnapshot {
-                network_id: sandbox_network_id(),
-                // These three "defaults" are not part of the actual default definition in
-                // rs-soroban-sdk, but if we don't have them the sandbox doesn't work right.
-                // Oof.
-                // TODO: Remove this hacky workaround.
-                min_persistent_entry_ttl: 4096,
-                min_temp_entry_ttl: 16,
-                max_entry_ttl: 6_312_000,
-                ..Default::default()
-            })
-        }
-        Err(e) => Err(e),
-    }
 }
 
 /// # Errors
@@ -244,7 +219,7 @@ pub fn get_contract_spec_from_state(
             ContractExecutable::StellarAsset => {
                 Ok(None)
                 // panic!("soroflare can't handle direct SACs invocations") // NB: this code is actually never going to be executed since
-                                                                         // it would require the user to have loaded a SAC which is not possible.
+                // it would require the user to have loaded a SAC which is not possible.
             }
             ContractExecutable::Wasm(hash) => {
                 // It's a contract code entry, so it should have an expiration if present
