@@ -99,6 +99,7 @@ pub fn ledger_snapshot_from_entries_and_ledger(
         network_id: hashed_network_id(network_id),
         sequence_number: ledger_sequence,
         ledger_entries,
+        protocol_version: 20,
         ..Default::default()
     })
 }

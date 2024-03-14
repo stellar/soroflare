@@ -12,3 +12,4 @@ node_modules/
 .soroban/
 .vscode/
 .wrangler/
+.DS_Store
