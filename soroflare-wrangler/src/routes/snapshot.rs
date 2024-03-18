@@ -223,6 +223,33 @@ mod test {
         // NOTE: currently the source account is inferred within the vm wrapper itself and already has
         // a xlm balance of 10000 XLM strooops by default.
         #[test]
+        fn gentest() {
+            let contract_a = stellar_strkey::Contract::from_string(
+                "CBKMUZNFQIAL775XBB2W2GP5CNHBM5YGH6C3XB7AY6SUVO2IBU3VYK2V",
+            ).unwrap().0.into();
+            let contract_b = stellar_strkey::Contract::from_string(
+                "CBRIAA73VOIKPZYM5G3LGPF3NGCFXLR3IW22MKEYJAB3QBOMTUTRCASK",
+            ).unwrap().0.into();
+
+            let snapshot = WithSnapshotInput {
+                adjustment_config: SimulationAdjustmentConfig::default_adjustment(),
+                network_config: None,
+                network: Some("Test SDF Network ; September 2015".into()),
+                ledger_sequence: 0,
+                source: [0; 32],
+                ledger_entries: vec![],
+                contract_id: contract_b,
+                fname: String::from("add_with"),
+                params: vec![
+                    ScVal::Address(ScAddress::Contract(contract_a)),
+                    ScVal::U32(5),
+                    ScVal::U32(15),
+                ],
+            };
+            println!("{}", serde_json::json!(snapshot));
+        }
+
+        #[test]
         fn transfer_ignore_fees() {
             let source_account = AccountId(PublicKey::PublicKeyTypeEd25519(Uint256(
                 stellar_strkey::ed25519::PublicKey::from_string(
