@@ -27,7 +27,7 @@ const json = {
             "multiplicative_factor": 1.0
         }
     },
-    "contract_id": [
+    "contract": [
         98,
         128,
         3,
@@ -63,10 +63,10 @@ const json = {
     ],
     "fname": "add_with",
     "ledger_entries": snapshot.ledger.ledger_entries,
-    "ledger_sequence": 5000,
+    "ledger_sequence": 0,
     "network": "Test SDF Network ; September 2015",
     "network_config": null,
-    "params": [
+    "args": [
         {
             "address": "CBKMUZNFQIAL775XBB2W2GP5CNHBM5YGH6C3XB7AY6SUVO2IBU3VYK2V"
         },
@@ -74,10 +74,10 @@ const json = {
             "u32": 5
         },
         {
-            "u32": 15
+            "u32": 95
         }
     ],
-    "source": [
+    "source_account": [
         0,
         0,
         0,
