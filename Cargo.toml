@@ -3,7 +3,8 @@ resolver = "2"
 
 members = [
     "soroflare-wrangler",
-    "soroflare-vm"
+#    "soroflare-vm",
+    "core"
 ]
 
 [workspace.package]

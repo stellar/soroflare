@@ -1,15 +1,12 @@
 use std::rc::Rc;
 
-use serde_derive::{Deserialize, Serialize};
-use soroban_env_host::{
-    storage::SnapshotSource,
-    xdr::{LedgerEntry, LedgerKey, ScError, ScErrorCode},
-    LedgerInfo,
-};
-//use soroban_ledger_snapshot::LedgerSnapshot;
-use crate::soroban_cli::network::{
-    hashed_network_id, sandbox_network_id, SANDBOX_NETWORK_PASSPHRASE,
-};
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+use soroban_env_host::{storage::SnapshotSource, xdr::{LedgerEntry, LedgerKey, ScError, ScErrorCode}, LedgerInfo};
+
+pub fn hashed_network_id(passphrase: &str) -> [u8; 32] {
+    Sha256::digest(passphrase.as_bytes()).into()
+}
 
 #[derive(Debug, Default, Clone)]
 pub struct LedgerSnapshot {
@@ -52,12 +49,6 @@ impl SnapshotSource for LedgerSnapshot {
     }
 }
 
-pub fn empty_ledger_snapshot() -> LedgerSnapshot {
-    LedgerSnapshot {
-        network_id: sandbox_network_id(),
-        ..Default::default()
-    }
-}
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct EntryWithLifetime {
@@ -80,8 +71,10 @@ pub fn ledger_snapshot_from_entries_and_ledger(
     keys: Vec<LedgerKey>,
     vals: Vec<EntryWithLifetime>,
     network: Option<&str>,
-) -> Result<LedgerSnapshot, crate::soroban_vm::Error> {
-    let network_id = network.unwrap_or(SANDBOX_NETWORK_PASSPHRASE);
+) -> LedgerSnapshot {
+    // Using a custom network id isn't really required at this point, but keeping it
+    // to distinguish from other real networks. 
+    let network_id = network.unwrap_or("Soroflare Stellar Network ; March 2024");
     let mut ledger_entries = Vec::new();
 
     for (idx, key) in keys.iter().enumerate() {
@@ -95,11 +88,12 @@ pub fn ledger_snapshot_from_entries_and_ledger(
         ))
     }
 
-    Ok(LedgerSnapshot {
+    LedgerSnapshot {
         network_id: hashed_network_id(network_id),
         sequence_number: ledger_sequence,
         ledger_entries,
         protocol_version: 20,
         ..Default::default()
-    })
+    }
 }
+
