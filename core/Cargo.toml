@@ -1,0 +1,25 @@
+[package]
+name = "core"
+edition = "2021"
+version.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+
+[dependencies.soroban-env-host]
+git = "https://github.com/heytdep/rs-soroban-env/"
+rev = "894e4209508c9fdaa128451053f83aa3feaea90c"
+#path = "/mnt/storagehdd/sdf-work/rs-soroban-env/soroban-env-host"
+features = ["testutils", "recording_mode", "unstable-next-api"]
+
+[dependencies.soroban-simulation]
+git = "https://github.com/heytdep/rs-soroban-env/"
+rev = "894e4209508c9fdaa128451053f83aa3feaea90c"
+#path = "/mnt/storagehdd/sdf-work/rs-soroban-env/soroban-simulation"
+
+[dependencies]
+hex = "0.4.3"
+stellar-strkey = "0.0.7"
+serde = "1.0.82"
+serde_derive = "1.0.82"
+sha2 = "0.10.7"

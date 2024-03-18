@@ -12,7 +12,15 @@ crate-type = ["cdylib", "rlib"]
 default = ["console_error_panic_hook"]
 
 [dependencies.soroban-env-host]
-path = "../../rs-soroban-env/soroban-env-host"
+git = "https://github.com/heytdep/rs-soroban-env/"
+rev = "894e4209508c9fdaa128451053f83aa3feaea90c"
+#path = "/mnt/storagehdd/sdf-work/rs-soroban-env/soroban-env-host"
+features = ["testutils", "recording_mode", "unstable-next-api"]
+
+[dependencies.soroban-simulation]
+git = "https://github.com/heytdep/rs-soroban-env/"
+rev = "894e4209508c9fdaa128451053f83aa3feaea90c"
+#path = "/mnt/storagehdd/sdf-work/rs-soroban-env/soroban-simulation"
 
 [dependencies]
 cfg-if = "0.1.2"
@@ -26,8 +34,10 @@ chrono = "0.4.23"
 base64 = "0.21.0"
 worker = "0.0.17"
 sha2 = "0.10.8"
-soroflare-vm = { path = "../soroflare-vm" }
+#soroflare-vm = { path = "../soroflare-vm" }
+core = { path = "../core" }
 hex = "0.4.3"
+stellar-strkey = "0.0.7"
 
 
 # The `console_error_panic_hook` crate provides better debugging of panics by
