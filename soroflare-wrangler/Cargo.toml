@@ -37,7 +37,7 @@ sha2 = "0.10.8"
 #soroflare-vm = { path = "../soroflare-vm" }
 core = { path = "../core" }
 hex = "0.4.3"
-stellar-strkey = "0.0.7"
+stellar-strkey = "0.0.8"
 
 
 # The `console_error_panic_hook` crate provides better debugging of panics by

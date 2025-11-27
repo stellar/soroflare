@@ -19,7 +19,7 @@ rev = "894e4209508c9fdaa128451053f83aa3feaea90c"
 
 [dependencies]
 hex = "0.4.3"
-stellar-strkey = "0.0.7"
+stellar-strkey = "0.0.8"
 serde = "1.0.82"
 serde_derive = "1.0.82"
 sha2 = "0.10.7"
