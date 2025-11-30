@@ -23,21 +23,21 @@ rev = "894e4209508c9fdaa128451053f83aa3feaea90c"
 #path = "/mnt/storagehdd/sdf-work/rs-soroban-env/soroban-simulation"
 
 [dependencies]
-cfg-if = "0.1.2"
+cfg-if = "1.0.0"
 serde_json = "1.0.67"
 serde = "1.0.152"
 serde_yaml = "0.9.17"
-jwt-compact = "0.6.0"
-time = "0.1.45"
-erased-serde = "0.3.24"
+jwt-compact = "0.8.0"
+time = "0.3.31"
+erased-serde = "0.4.1"
 chrono = "0.4.23"
-base64 = "0.21.0"
-worker = "0.0.17"
+base64 = "0.22.1"
+worker = "0.0.20"
 sha2 = "0.10.8"
 #soroflare-vm = { path = "../soroflare-vm" }
 core = { path = "../core" }
 hex = "0.4.3"
-stellar-strkey = "0.0.8"
+stellar-strkey = "0.0.14"
 
 
 # The `console_error_panic_hook` crate provides better debugging of panics by
